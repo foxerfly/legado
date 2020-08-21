@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read.config
 
+import android.annotation.SuppressLint
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.util.DisplayMetrics
@@ -10,8 +11,8 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import androidx.fragment.app.DialogFragment
 import androidx.preference.Preference
-import androidx.preference.PreferenceFragmentCompat
 import io.legado.app.R
+import io.legado.app.base.BasePreferenceFragment
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.ReadBookConfig
@@ -64,9 +65,10 @@ class MoreConfigDialog : DialogFragment() {
             .commit()
     }
 
-    class ReadPreferenceFragment : PreferenceFragmentCompat(),
+    class ReadPreferenceFragment : BasePreferenceFragment(),
         SharedPreferences.OnSharedPreferenceChangeListener {
 
+        @SuppressLint("RestrictedApi")
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             addPreferencesFromResource(R.xml.pref_config_read)
         }
@@ -110,6 +112,13 @@ class MoreConfigDialog : DialogFragment() {
                     activity?.let {
                         Help.setOrientation(it)
                     }
+                }
+                PreferKey.textFullJustify,
+                PreferKey.textBottomJustify -> {
+                    postEvent(EventBus.UP_CONFIG, true)
+                }
+                PreferKey.showBrightnessView -> {
+                    postEvent(PreferKey.showBrightnessView, "")
                 }
             }
         }

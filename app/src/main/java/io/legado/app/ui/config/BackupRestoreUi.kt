@@ -77,9 +77,8 @@ object BackupRestoreUi {
 
     fun restore(fragment: Fragment) {
         Coroutine.async(context = Main) {
-            if (!WebDavHelp.showRestoreDialog(fragment.requireContext()) {
-                    fragment.toast(R.string.restore_success)
-                }) {
+            val restoreFromWebDav = WebDavHelp.showRestoreDialog(fragment.requireContext())
+            if (!restoreFromWebDav) {
                 val backupPath = fragment.getPrefString(PreferKey.backupPath)
                 if (backupPath?.isNotEmpty() == true) {
                     if (backupPath.isContentPath()) {
@@ -87,7 +86,6 @@ object BackupRestoreUi {
                         val doc = DocumentFile.fromTreeUri(fragment.requireContext(), uri)
                         if (doc?.canWrite() == true) {
                             Restore.restore(fragment.requireContext(), backupPath)
-                            fragment.toast(R.string.restore_success)
                         } else {
                             selectBackupFolder(fragment, restoreSelectRequestCode)
                         }
@@ -101,6 +99,10 @@ object BackupRestoreUi {
         }
     }
 
+    fun restoreByFolder(fragment: Fragment) {
+        selectBackupFolder(fragment, restoreSelectRequestCode)
+    }
+
     private fun restoreUsePermission(fragment: Fragment, path: String) {
         PermissionsCompat.Builder(fragment)
             .addPermissions(*Permissions.Group.STORAGE)
@@ -110,8 +112,6 @@ object BackupRestoreUi {
                     AppConfig.backupPath = path
                     Restore.restoreDatabase(path)
                     Restore.restoreConfig(path)
-                }.onSuccess {
-                    fragment.toast(R.string.restore_success)
                 }
             }
             .request()
@@ -135,8 +135,6 @@ object BackupRestoreUi {
                 AppConfig.backupPath = currentPath
                 Coroutine.async {
                     Restore.restore(App.INSTANCE, currentPath)
-                }.onSuccess {
-                    App.INSTANCE.toast(R.string.restore_success)
                 }
             }
             selectFolderRequestCode -> {
@@ -175,8 +173,6 @@ object BackupRestoreUi {
                     AppConfig.backupPath = uri.toString()
                     Coroutine.async {
                         Restore.restore(App.INSTANCE, uri.toString())
-                    }.onSuccess {
-                        App.INSTANCE.toast(R.string.restore_success)
                     }
                 }
             }
@@ -190,10 +186,11 @@ object BackupRestoreUi {
                     AppConfig.backupPath = uri.toString()
                 }
             }
-            oldDataRequestCode ->
-                if (resultCode == RESULT_OK) data?.data?.let { uri ->
+            oldDataRequestCode -> if (resultCode == RESULT_OK) {
+                data?.data?.let { uri ->
                     ImportOldData.importUri(uri)
                 }
+            }
         }
     }
 

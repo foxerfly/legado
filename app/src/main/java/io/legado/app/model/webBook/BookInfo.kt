@@ -5,9 +5,11 @@ import io.legado.app.R
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookSource
+import io.legado.app.help.BookHelp
 import io.legado.app.model.Debug
 import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.utils.NetworkUtils
+import io.legado.app.utils.StringUtils.wordCountFormat
 import io.legado.app.utils.htmlFormat
 
 object BookInfo {
@@ -33,12 +35,12 @@ object BookInfo {
             }
         }
         Debug.log(bookSource.bookSourceUrl, "┌获取书名")
-        analyzeRule.getString(infoRule.name).let {
+        BookHelp.formatBookName(analyzeRule.getString(infoRule.name)).trim { it <= ' ' }.let {
             if (it.isNotEmpty()) book.name = it
         }
         Debug.log(bookSource.bookSourceUrl, "└${book.name}")
         Debug.log(bookSource.bookSourceUrl, "┌获取作者")
-        analyzeRule.getString(infoRule.author).let {
+        BookHelp.formatBookAuthor(analyzeRule.getString(infoRule.author)).let {
             if (it.isNotEmpty()) book.author = it.replace(AppPattern.authorRegex, "")
         }
         Debug.log(bookSource.bookSourceUrl, "└${book.author}")
@@ -50,7 +52,7 @@ object BookInfo {
             }
         Debug.log(bookSource.bookSourceUrl, "└${book.kind}")
         Debug.log(bookSource.bookSourceUrl, "┌获取字数")
-        analyzeRule.getString(infoRule.wordCount).let {
+        wordCountFormat(analyzeRule.getString(infoRule.wordCount)).let {
             if (it.isNotEmpty()) book.wordCount = it
         }
         Debug.log(bookSource.bookSourceUrl, "└${book.wordCount}")

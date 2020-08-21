@@ -42,9 +42,22 @@ object HttpHelper {
     fun simpleGet(url: String, encode: String? = null): String? {
         NetworkUtils.getBaseUrl(url)?.let { baseUrl ->
             val response = getApiService<HttpGetApi>(baseUrl, encode)
-                .get(url, mapOf())
+                .get(url, mapOf(Pair(AppConst.UA_NAME, AppConst.userAgent)))
                 .execute()
             return response.body()
+        }
+        return null
+    }
+
+    fun getBytes(url: String, referer: String): ByteArray? {
+        NetworkUtils.getBaseUrl(url)?.let { baseUrl ->
+            val headers =
+                mapOf(Pair(AppConst.UA_NAME, AppConst.userAgent), Pair("Referer", referer))
+            return getByteRetrofit(baseUrl)
+                .create(HttpGetApi::class.java)
+                .getMapByte(url, mapOf(), headers)
+                .execute()
+                .body()
         }
         return null
     }
@@ -52,17 +65,17 @@ object HttpHelper {
     suspend fun simpleGetAsync(url: String, encode: String? = null): String? {
         NetworkUtils.getBaseUrl(url)?.let { baseUrl ->
             val response = getApiService<HttpGetApi>(baseUrl, encode)
-                .getAsync(url, mapOf())
+                .getAsync(url, mapOf(Pair(AppConst.UA_NAME, AppConst.userAgent)))
             return response.body()
         }
         return null
     }
 
-    suspend fun simpleGetByteAsync(url: String): ByteArray? {
+    suspend fun simpleGetBytesAsync(url: String): ByteArray? {
         NetworkUtils.getBaseUrl(url)?.let { baseUrl ->
             return getByteRetrofit(baseUrl)
                 .create(HttpGetApi::class.java)
-                .getMapByteAsync(url, mapOf(), mapOf())
+                .getMapByteAsync(url, mapOf(), mapOf(Pair(AppConst.UA_NAME, AppConst.userAgent)))
                 .body()
         }
         return null
@@ -91,7 +104,6 @@ object HttpHelper {
         return Interceptor { chain ->
             val request = chain.request()
                 .newBuilder()
-                .addHeader(AppConst.UA_NAME, AppConst.userAgent)
                 .addHeader("Keep-Alive", "300")
                 .addHeader("Connection", "Keep-Alive")
                 .addHeader("Cache-Control", "no-cache")

@@ -1,20 +1,21 @@
 package io.legado.app.base
 
+import android.content.Context
 import android.os.Bundle
+import android.util.AttributeSet
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.view.WindowManager
+import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
 import io.legado.app.R
+import io.legado.app.constant.AppConst
 import io.legado.app.constant.Theme
 import io.legado.app.lib.theme.ATH
-import io.legado.app.lib.theme.ColorUtils
+import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
-import io.legado.app.utils.applyOpenTint
-import io.legado.app.utils.applyTint
-import io.legado.app.utils.disableAutoFill
-import io.legado.app.utils.hideSoftInput
+import io.legado.app.utils.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
@@ -23,9 +24,26 @@ import kotlinx.coroutines.cancel
 abstract class BaseActivity(
     private val layoutID: Int,
     private val fullScreen: Boolean = true,
-    private val theme: Theme = Theme.Auto
+    private val theme: Theme = Theme.Auto,
+    private val transparent: Boolean = false
 ) : AppCompatActivity(),
     CoroutineScope by MainScope() {
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LanguageUtils.setConfiguration(newBase))
+    }
+
+    override fun onCreateView(
+        parent: View?,
+        name: String,
+        context: Context,
+        attrs: AttributeSet
+    ): View? {
+        if (AppConst.menuViewNames.contains(name) && parent?.parent is FrameLayout) {
+            (parent.parent as View).setBackgroundColor(backgroundColor)
+        }
+        return super.onCreateView(parent, name, context, attrs)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         window.decorView.disableAutoFill()
@@ -79,14 +97,23 @@ abstract class BaseActivity(
     }
 
     private fun initTheme() {
-        ATH.applyBackgroundTint(window.decorView)
         when (theme) {
-            Theme.Dark -> setTheme(R.style.AppTheme_Dark)
-            Theme.Light -> setTheme(R.style.AppTheme_Light)
-            else -> if (ColorUtils.isColorLight(primaryColor)) {
-                setTheme(R.style.AppTheme_Light)
-            } else {
+            Theme.Transparent -> setTheme(R.style.AppTheme_Transparent)
+            Theme.Dark -> {
                 setTheme(R.style.AppTheme_Dark)
+                ATH.applyBackgroundTint(window.decorView)
+            }
+            Theme.Light -> {
+                setTheme(R.style.AppTheme_Light)
+                ATH.applyBackgroundTint(window.decorView)
+            }
+            else -> {
+                if (ColorUtils.isColorLight(primaryColor)) {
+                    setTheme(R.style.AppTheme_Light)
+                } else {
+                    setTheme(R.style.AppTheme_Dark)
+                }
+                ATH.applyBackgroundTint(window.decorView)
             }
         }
     }
@@ -107,6 +134,11 @@ abstract class BaseActivity(
         } else if (theme == Theme.Light) {
             ATH.setLightStatusBar(this, true)
         }
+        upNavigationBarColor()
+    }
+
+    open fun upNavigationBarColor() {
+        ATH.setNavigationBarColorAuto(this)
     }
 
     open fun observeLiveBus() {

@@ -23,18 +23,17 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.rule.*
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.ATH
+import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
 import io.legado.app.ui.login.SourceLogin
+import io.legado.app.ui.qrcode.QrCodeActivity
 import io.legado.app.ui.widget.KeyboardToolPop
 import io.legado.app.utils.GSON
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.getViewModel
 import io.legado.app.utils.shareWithQr
 import kotlinx.android.synthetic.main.activity_book_source_edit.*
-import org.jetbrains.anko.displayMetrics
-import org.jetbrains.anko.share
-import org.jetbrains.anko.startActivity
-import org.jetbrains.anko.toast
+import org.jetbrains.anko.*
 import kotlin.math.abs
 
 class BookSourceEditActivity :
@@ -43,6 +42,7 @@ class BookSourceEditActivity :
     override val viewModel: BookSourceEditViewModel
         get() = getViewModel(BookSourceEditViewModel::class.java)
 
+    private val qrRequestCode = 101
     private val adapter = BookSourceEditAdapter()
     private val sourceEntities: ArrayList<EditEntity> = ArrayList()
     private val searchEntities: ArrayList<EditEntity> = ArrayList()
@@ -87,6 +87,7 @@ class BookSourceEditActivity :
                 }
             }
             R.id.menu_paste_source -> viewModel.pasteSource { upRecyclerView(it) }
+            R.id.menu_qr_code_camera -> startActivityForResult<QrCodeActivity>(qrRequestCode)
             R.id.menu_share_str -> GSON.toJson(getSource())?.let { share(it) }
             R.id.menu_share_qr -> GSON.toJson(getSource())?.let { sourceStr ->
                 shareWithQr(getString(R.string.share_book_source), sourceStr)
@@ -122,6 +123,7 @@ class BookSourceEditActivity :
         window.decorView.viewTreeObserver.addOnGlobalLayoutListener(KeyboardOnGlobalChangeListener())
         recycler_view.layoutManager = LinearLayoutManager(this)
         recycler_view.adapter = adapter
+        tab_layout.setBackgroundColor(backgroundColor)
         tab_layout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabReselected(tab: TabLayout.Tab?) {
 
@@ -233,6 +235,8 @@ class BookSourceEditActivity :
             add(EditEntity("nextContentUrl", cr?.nextContentUrl, R.string.rule_next_content))
             add(EditEntity("webJs", cr?.webJs, R.string.rule_web_js))
             add(EditEntity("sourceRegex", cr?.sourceRegex, R.string.rule_source_regex))
+            add(EditEntity("replaceRegex", cr?.replaceRegex, R.string.rule_replace_regex))
+            add(EditEntity("imageStyle", cr?.imageStyle, R.string.rule_image_style))
         }
         //发现
         val er = source?.getExploreRule()
@@ -249,6 +253,7 @@ class BookSourceEditActivity :
             add(EditEntity("coverUrl", er?.coverUrl, R.string.rule_cover_url))
             add(EditEntity("bookUrl", er?.bookUrl, R.string.r_book_url))
         }
+        tab_layout.selectTab(tab_layout.getTabAt(0))
         setEditEntities(0)
     }
 
@@ -332,6 +337,8 @@ class BookSourceEditActivity :
                 "nextContentUrl" -> contentRule.nextContentUrl = it.value
                 "webJs" -> contentRule.webJs = it.value
                 "sourceRegex" -> contentRule.sourceRegex = it.value
+                "replaceRegex" -> contentRule.replaceRegex = it.value
+                "imageStyle" -> contentRule.imageStyle = it.value
             }
         }
         source.ruleSearch = searchRule
@@ -384,6 +391,19 @@ class BookSourceEditActivity :
 
     private fun closePopupWindow() {
         mSoftKeyboardTool?.dismiss()
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        when (requestCode) {
+            qrRequestCode -> if (resultCode == RESULT_OK) {
+                data?.getStringExtra("result")?.let {
+                    viewModel.importSource(it) { source ->
+                        upRecyclerView(source)
+                    }
+                }
+            }
+        }
     }
 
     private inner class KeyboardOnGlobalChangeListener : ViewTreeObserver.OnGlobalLayoutListener {

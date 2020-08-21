@@ -10,13 +10,14 @@ import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.EditText
 import android.widget.PopupWindow
 import androidx.appcompat.widget.Toolbar
-import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.Observer
 import io.legado.app.R
+import io.legado.app.base.BaseDialogFragment
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.Theme
 import io.legado.app.data.entities.ReplaceRule
+import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.ui.widget.KeyboardToolPop
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.getViewModel
@@ -24,7 +25,7 @@ import io.legado.app.utils.toast
 import kotlinx.android.synthetic.main.dialog_replace_edit.*
 import org.jetbrains.anko.sdk27.listeners.onFocusChange
 
-class ReplaceEditDialog : DialogFragment(),
+class ReplaceEditDialog : BaseDialogFragment(),
     Toolbar.OnMenuItemClickListener,
     KeyboardToolPop.CallBack {
 
@@ -34,15 +35,17 @@ class ReplaceEditDialog : DialogFragment(),
             fragmentManager: FragmentManager,
             id: Long = -1,
             pattern: String? = null,
-            isRegex: Boolean = false
+            isRegex: Boolean = false,
+            scope: String? = null
         ) {
             val dialog = ReplaceEditDialog()
             val bundle = Bundle()
             bundle.putLong("id", id)
             bundle.putString("pattern", pattern)
             bundle.putBoolean("isRegex", isRegex)
+            bundle.putString("scope", scope)
             dialog.arguments = bundle
-            dialog.show(fragmentManager, "editReplace")
+            dialog.show(fragmentManager, this::class.simpleName)
         }
     }
 
@@ -63,8 +66,8 @@ class ReplaceEditDialog : DialogFragment(),
         return inflater.inflate(R.layout.dialog_replace_edit, container)
     }
 
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
+    override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
+        tool_bar.setBackgroundColor(bottomBackground)
         mSoftKeyboardTool = KeyboardToolPop(requireContext(), AppConst.keyboardToolChars, this)
         tool_bar.inflateMenu(R.menu.replace_edit)
         tool_bar.menu.applyTint(requireContext(), Theme.getTheme())

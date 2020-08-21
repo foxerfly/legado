@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -30,6 +32,7 @@ import io.legado.app.help.storage.SyncBookProgress
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.noButton
 import io.legado.app.lib.dialogs.okButton
+import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.receiver.TimeBatteryReceiver
 import io.legado.app.service.BaseReadAloudService
@@ -69,6 +72,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
     ReadAloudDialog.CallBack,
     ChangeSourceDialog.CallBack,
     ReadBook.CallBack,
+    AutoReadDialog.CallBack,
     TocRegexDialog.CallBack,
     ReplaceEditDialog.CallBack,
     ColorPickerDialogListener {
@@ -131,6 +135,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
 
     override fun onPause() {
         super.onPause()
+        ReadBook.saveRead()
         timeBatteryReceiver?.let {
             unregisterReceiver(it)
             timeBatteryReceiver = null
@@ -139,6 +144,21 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
         if (!BuildConfig.DEBUG) {
             SyncBookProgress.uploadBookProgress()
             Backup.autoBack(this)
+        }
+    }
+
+    override fun upNavigationBarColor() {
+        when {
+            read_menu == null -> return
+            read_menu.isVisible -> {
+                ATH.setNavigationBarColorAuto(this)
+            }
+            ReadBookConfig.bg is ColorDrawable -> {
+                ATH.setNavigationBarColorAuto(this, ReadBookConfig.bgMeanColor)
+            }
+            else -> {
+                ATH.setNavigationBarColorAuto(this, Color.BLACK)
+            }
         }
     }
 
@@ -196,7 +216,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
                     when (item.groupId) {
                         R.id.menu_group_on_line -> item.isVisible = onLine
                         R.id.menu_group_local -> item.isVisible = !onLine
-                        R.id.menu_group_text -> item.isVisible = book.isTxt()
+                        R.id.menu_group_text -> item.isVisible = book.isLocalTxt()
                         R.id.menu_group_login ->
                             item.isVisible = !ReadBook.webBook?.bookSource?.loginUrl.isNullOrEmpty()
                         else -> if (item.itemId == R.id.menu_enable_replace) {
@@ -240,7 +260,10 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
                 onReplaceRuleSave()
             }
             R.id.menu_book_info -> ReadBook.book?.let {
-                startActivity<BookInfoActivity>(Pair("bookUrl", it.bookUrl))
+                startActivity<BookInfoActivity>(
+                    Pair("name", it.name),
+                    Pair("author", it.author)
+                )
             }
             R.id.menu_toc_regex -> TocRegexDialog.show(
                 supportFragmentManager,
@@ -447,7 +470,18 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
     override fun onMenuItemSelected(itemId: Int): Boolean {
         when (itemId) {
             R.id.menu_replace -> {
-                ReplaceEditDialog.show(supportFragmentManager, pattern = selectedText)
+                val scopes = arrayListOf<String>()
+                ReadBook.book?.name?.let {
+                    scopes.add(it)
+                }
+                ReadBook.bookSource?.bookSourceUrl?.let {
+                    scopes.add(it)
+                }
+                ReplaceEditDialog.show(
+                    supportFragmentManager,
+                    pattern = selectedText,
+                    scope = scopes.joinToString(";")
+                )
                 return true
             }
         }
@@ -495,8 +529,10 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
      * 更新内容
      */
     override fun upContent(relativePosition: Int, resetPageOffset: Boolean) {
+        autoPageProgress = 0
         launch {
             page_view.upContent(relativePosition, resetPageOffset)
+            seek_read_page.progress = ReadBook.durPageIndex
         }
     }
 
@@ -518,6 +554,9 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
                 seek_read_page.progress = ReadBook.durPageIndex
                 tv_pre.isEnabled = ReadBook.durChapterIndex != 0
                 tv_next.isEnabled = ReadBook.durChapterIndex != ReadBook.chapterSize - 1
+            } ?: let {
+                tv_chapter_name.gone()
+                tv_chapter_url.gone()
             }
         }
     }
@@ -547,10 +586,16 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
     }
 
     override fun clickCenter() {
-        if (BaseReadAloudService.isRun) {
-            showReadAloudDialog()
-        } else {
-            read_menu.runMenuIn()
+        when {
+            BaseReadAloudService.isRun -> {
+                showReadAloudDialog()
+            }
+            isAutoPage -> {
+                AutoReadDialog().show(supportFragmentManager, "autoRead")
+            }
+            else -> {
+                read_menu.runMenuIn()
+            }
         }
     }
 
@@ -569,12 +614,14 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
             autoPageStop()
         } else {
             isAutoPage = true
+            page_view.upContent()
+            page_view.upContent(1)
             autoPagePlus()
         }
         read_menu.setAutoPage(isAutoPage)
     }
 
-    private fun autoPageStop() {
+    override fun autoPageStop() {
         isAutoPage = false
         mHandler.removeCallbacks(autoPageRunnable)
         page_view.upContent()
@@ -583,7 +630,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
     private fun autoPagePlus() {
         mHandler.removeCallbacks(autoPageRunnable)
         autoPageProgress++
-        if (autoPageProgress >= 460) {
+        if (autoPageProgress >= ReadBookConfig.autoReadSpeed * 10) {
             autoPageProgress = 0
             page_view.fillPage(PageDelegate.Direction.NEXT)
         } else {
@@ -640,6 +687,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
      */
     override fun upSystemUiVisibility() {
         Help.upSystemUiVisibility(this, !read_menu.isVisible)
+        upNavigationBarColor()
     }
 
     /**
@@ -703,7 +751,10 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
             if (!ReadBook.inBookshelf) {
                 this.alert(title = getString(R.string.add_to_shelf)) {
                     message = getString(R.string.check_add_bookshelf, it.name)
-                    okButton { ReadBook.inBookshelf = true }
+                    okButton {
+                        ReadBook.inBookshelf = true
+                        setResult(Activity.RESULT_OK)
+                    }
                     noButton { viewModel.removeFromBookshelf { super.finish() } }
                 }.show().applyTint()
             } else {
@@ -778,6 +829,9 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
         }
         observeEvent<Boolean>(PreferKey.textSelectAble) {
             page_view.curPage.upSelectAble(it)
+        }
+        observeEvent<String>(PreferKey.showBrightnessView) {
+            read_menu.upBrightnessState()
         }
     }
 

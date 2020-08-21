@@ -23,6 +23,8 @@ import io.legado.app.help.BlurTransformation
 import io.legado.app.help.ImageLoader
 import io.legado.app.help.IntentDataHelp
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.theme.backgroundColor
+import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.ui.audio.AudioPlayActivity
 import io.legado.app.ui.book.changecover.ChangeCoverDialog
 import io.legado.app.ui.book.changesource.ChangeSourceDialog
@@ -32,6 +34,7 @@ import io.legado.app.ui.book.info.edit.BookInfoEditActivity
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
+import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.utils.dp
 import io.legado.app.utils.getViewModel
 import io.legado.app.utils.gone
@@ -52,12 +55,17 @@ class BookInfoActivity :
 
     private val requestCodeChapterList = 568
     private val requestCodeSourceEdit = 562
+    private val requestCodeRead = 432
 
     override val viewModel: BookInfoViewModel
         get() = getViewModel(BookInfoViewModel::class.java)
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         title_bar.transparent()
+        arc_view.setBgColor(backgroundColor)
+        ll_info.setBackgroundColor(backgroundColor)
+        scroll_view.setBackgroundColor(backgroundColor)
+        fl_action.setBackgroundColor(bottomBackground)
         viewModel.bookData.observe(this, Observer { showBook(it) })
         viewModel.chapterListData.observe(this, Observer { upLoading(false, it) })
         viewModel.initData(intent)
@@ -86,6 +94,9 @@ class BookInfoActivity :
             R.id.menu_refresh -> {
                 upLoading(true)
                 viewModel.bookData.value?.let {
+                    if (it.isLocalBook()) {
+                        it.tocUrl = ""
+                    }
                     viewModel.loadBookInfo(it)
                 }
             }
@@ -138,7 +149,7 @@ class BookInfoActivity :
     }
 
     private fun defaultCover(): RequestBuilder<Drawable> {
-        return ImageLoader.load(this, R.drawable.image_cover_default)
+        return ImageLoader.load(this, CoverImageView.defaultDrawable)
             .apply(bitmapTransform(BlurTransformation(this, 25)))
     }
 
@@ -295,11 +306,13 @@ class BookInfoActivity :
 
     private fun startReadActivity(book: Book) {
         when (book.type) {
-            BookType.audio -> startActivity<AudioPlayActivity>(
+            BookType.audio -> startActivityForResult<AudioPlayActivity>(
+                requestCodeRead,
                 Pair("bookUrl", book.bookUrl),
                 Pair("inBookshelf", viewModel.inBookshelf)
             )
-            else -> startActivity<ReadBookActivity>(
+            else -> startActivityForResult<ReadBookActivity>(
+                requestCodeRead,
                 Pair("bookUrl", book.bookUrl),
                 Pair("inBookshelf", viewModel.inBookshelf),
                 Pair("key", IntentDataHelp.putData(book))
@@ -348,23 +361,29 @@ class BookInfoActivity :
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         when (requestCode) {
-            requestCodeSourceEdit -> if (resultCode == Activity.RESULT_OK) {
-                viewModel.initData(intent)
-            }
-            requestCodeChapterList -> if (resultCode == Activity.RESULT_OK) {
-                viewModel.bookData.value?.let {
-                    data?.getIntExtra("index", it.durChapterIndex)?.let { index ->
-                        if (it.durChapterIndex != index) {
-                            it.durChapterIndex = index
-                            it.durChapterPos = 0
+            requestCodeSourceEdit ->
+                if (resultCode == Activity.RESULT_OK) {
+                    viewModel.upEditBook()
+                }
+            requestCodeChapterList ->
+                if (resultCode == Activity.RESULT_OK) {
+                    viewModel.bookData.value?.let {
+                        data?.getIntExtra("index", it.durChapterIndex)?.let { index ->
+                            if (it.durChapterIndex != index) {
+                                it.durChapterIndex = index
+                                it.durChapterPos = 0
+                            }
+                            startReadActivity(it)
                         }
-                        startReadActivity(it)
+                    }
+                } else {
+                    if (!viewModel.inBookshelf) {
+                        viewModel.delBook()
                     }
                 }
-            } else {
-                if (!viewModel.inBookshelf) {
-                    viewModel.delBook()
-                }
+            requestCodeRead -> if (resultCode == Activity.RESULT_OK) {
+                viewModel.inBookshelf = true
+                upTvBookshelf()
             }
         }
     }
