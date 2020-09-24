@@ -21,10 +21,12 @@ object AppConfig {
     var isNightTheme: Boolean
         get() = isNightTheme(App.INSTANCE)
         set(value) {
-            if (value) {
-                App.INSTANCE.putPrefString(PreferKey.themeMode, "2")
-            } else {
-                App.INSTANCE.putPrefString(PreferKey.themeMode, "1")
+            if (isNightTheme != value) {
+                if (value) {
+                    App.INSTANCE.putPrefString(PreferKey.themeMode, "2")
+                } else {
+                    App.INSTANCE.putPrefString(PreferKey.themeMode, "1")
+                }
             }
         }
 
@@ -56,6 +58,9 @@ object AppConfig {
             App.INSTANCE.putPrefBoolean(PreferKey.showRss, value)
         }
 
+    val backgroundVerification: Boolean
+        get() = App.INSTANCE.getPrefBoolean(R.string.pk_background_verification, true)
+
     val autoRefreshBook: Boolean
         get() = App.INSTANCE.getPrefBoolean(R.string.pk_auto_refresh)
 
@@ -80,9 +85,6 @@ object AppConfig {
         set(value) {
             App.INSTANCE.putPrefInt(PreferKey.ttsSpeechRate, value)
         }
-
-    val ttsSpeechPer: String
-        get() = App.INSTANCE.getPrefString(PreferKey.ttsSpeechPer) ?: "0"
 
     val clickAllNext: Boolean get() = App.INSTANCE.getPrefBoolean(PreferKey.clickAllNext, false)
 

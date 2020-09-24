@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Build
+import android.provider.Settings
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.multidex.MultiDexApplication
@@ -34,15 +35,17 @@ class App : MultiDexApplication() {
         @JvmStatic
         lateinit var db: AppDatabase
             private set
-    }
 
-    var versionCode = 0
-    var versionName = ""
+        lateinit var androidId: String
+        var versionCode = 0
+        var versionName = ""
+    }
 
     override fun onCreate() {
         super.onCreate()
         INSTANCE = this
-        CrashHandler().init(this)
+        androidId = Settings.System.getString(contentResolver, Settings.Secure.ANDROID_ID)
+        CrashHandler(this)
         LanguageUtils.setConfigurationOld(this)
         db = AppDatabase.createDatabase(INSTANCE)
         packageManager.getPackageInfo(packageName, 0)?.let {
@@ -153,7 +156,7 @@ class App : MultiDexApplication() {
             //用唯一的ID创建渠道对象
             val downloadChannel = NotificationChannel(
                 channelIdDownload,
-                getString(R.string.download_offline),
+                getString(R.string.action_download),
                 NotificationManager.IMPORTANCE_LOW
             )
             //初始化channel

@@ -4,10 +4,7 @@ import android.annotation.SuppressLint
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.util.DisplayMetrics
-import android.view.Gravity
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
+import android.view.*
 import android.widget.LinearLayout
 import androidx.fragment.app.DialogFragment
 import androidx.preference.Preference
@@ -18,7 +15,7 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.help.ReadBookConfig
 import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.bottomBackground
-import io.legado.app.ui.book.read.Help
+import io.legado.app.ui.book.read.ReadBookActivityHelp
 import io.legado.app.utils.dp
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.postEvent
@@ -30,10 +27,10 @@ class MoreConfigDialog : DialogFragment() {
         super.onStart()
         val dm = DisplayMetrics()
         activity?.let {
-            Help.upSystemUiVisibility(it)
             it.windowManager?.defaultDisplay?.getMetrics(dm)
         }
         dialog?.window?.let {
+            it.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             it.setBackgroundDrawableResource(R.color.background)
             it.decorView.setPadding(0, 0, 0, 0)
             val attr = it.attributes
@@ -110,7 +107,7 @@ class MoreConfigDialog : DialogFragment() {
                 PreferKey.textSelectAble -> postEvent(key, getPrefBoolean(key))
                 getString(R.string.pk_requested_direction) -> {
                     activity?.let {
-                        Help.setOrientation(it)
+                        ReadBookActivityHelp.setOrientation(it)
                     }
                 }
                 PreferKey.textFullJustify,

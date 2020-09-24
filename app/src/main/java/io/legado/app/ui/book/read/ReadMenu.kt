@@ -65,6 +65,8 @@ class ReadMenu : FrameLayout {
         brightnessBackground.setColor(ColorUtils.adjustAlpha(bgColor, 0.5f))
         ll_brightness.background = brightnessBackground
         ll_bottom_bg.setBackgroundColor(bgColor)
+        fabSearch.backgroundTintList = bottomBackgroundList
+        fabSearch.setColorFilter(textColor)
         fabAutoPage.backgroundTintList = bottomBackgroundList
         fabAutoPage.setColorFilter(textColor)
         fabReplaceRule.backgroundTintList = bottomBackgroundList
@@ -170,6 +172,13 @@ class ReadMenu : FrameLayout {
             }
         })
 
+        //搜索
+        fabSearch.onClick {
+            runMenuOut {
+                callBack?.openSearchActivity(null)
+            }
+        }
+
         //自动翻页
         fabAutoPage.onClick {
             runMenuOut {
@@ -239,7 +248,9 @@ class ReadMenu : FrameLayout {
                 vw_menu_bg.onClick { runMenuOut() }
                 vwNavigationBar.layoutParams = vwNavigationBar.layoutParams.apply {
                     height =
-                        if (ReadBookConfig.hideNavigationBar && Help.isNavigationBarExist(activity))
+                        if (ReadBookConfig.hideNavigationBar
+                            && SystemUtils.isNavigationBarExist(activity)
+                        )
                             context.navigationBarHeight
                         else 0
                 }
@@ -289,6 +300,7 @@ class ReadMenu : FrameLayout {
         fun autoPage()
         fun openReplaceRule()
         fun openChapterList()
+        fun openSearchActivity(searchWord: String?)
         fun showReadStyle()
         fun showMoreSetting()
         fun showReadAloudDialog()

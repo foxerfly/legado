@@ -9,12 +9,12 @@ import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
+import android.util.Log
 import android.view.*
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import androidx.core.view.get
 import androidx.core.view.isVisible
 import androidx.core.view.size
-import androidx.lifecycle.Observer
 import com.jaredrummler.android.colorpicker.ColorPickerDialogListener
 import io.legado.app.BuildConfig
 import io.legado.app.R
@@ -48,6 +48,7 @@ import io.legado.app.ui.book.read.page.ContentTextView
 import io.legado.app.ui.book.read.page.PageView
 import io.legado.app.ui.book.read.page.TextPageFactory
 import io.legado.app.ui.book.read.page.delegate.PageDelegate
+import io.legado.app.ui.book.searchContent.SearchListActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.login.SourceLogin
 import io.legado.app.ui.replacerule.ReplaceRuleActivity
@@ -56,12 +57,14 @@ import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.*
 import kotlinx.android.synthetic.main.activity_book_read.*
 import kotlinx.android.synthetic.main.view_read_menu.*
+import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.IO
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers.Main
 import org.jetbrains.anko.sdk27.listeners.onClick
 import org.jetbrains.anko.startActivity
 import org.jetbrains.anko.startActivityForResult
 import org.jetbrains.anko.toast
+import java.lang.Runnable
 
 class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_book_read),
     View.OnTouchListener,
@@ -79,40 +82,44 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
     private val requestCodeChapterList = 568
     private val requestCodeEditSource = 111
     private val requestCodeReplace = 312
+    private val requestCodeSearchResult = 123
     private var menu: Menu? = null
     private var textActionMenu: TextActionMenu? = null
 
     override val viewModel: ReadBookViewModel
         get() = getViewModel(ReadBookViewModel::class.java)
 
+    override val scope: CoroutineScope get() = this
     override val isInitFinish: Boolean get() = viewModel.isInitFinish
 
     private val mHandler = Handler()
-    private val keepScreenRunnable: Runnable = Runnable { Help.keepScreenOn(window, false) }
+    private val keepScreenRunnable: Runnable =
+        Runnable { ReadBookActivityHelp.keepScreenOn(window, false) }
     private val autoPageRunnable: Runnable = Runnable { autoPagePlus() }
     override var autoPageProgress = 0
     override var isAutoPage = false
     private var screenTimeOut: Long = 0
     private var timeBatteryReceiver: TimeBatteryReceiver? = null
+    private var loadStates: Boolean = false
     override val pageFactory: TextPageFactory get() = page_view.pageFactory
     override val headerHeight: Int get() = page_view.curPage.headerHeight
 
     override fun onCreate(savedInstanceState: Bundle?) {
         ReadBook.msg = null
-        Help.setOrientation(this)
+        ReadBookActivityHelp.setOrientation(this)
         super.onCreate(savedInstanceState)
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        Help.upLayoutInDisplayCutoutMode(window)
+        ReadBookActivityHelp.upLayoutInDisplayCutoutMode(window)
         initView()
         upScreenTimeOut()
         ReadBook.callBack = this
-        ReadBook.titleDate.observe(this, Observer {
+        ReadBook.titleDate.observe(this) {
             title_bar.title = it
             upMenu()
             upView()
-        })
+        }
         viewModel.initData(intent)
     }
 
@@ -123,11 +130,13 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        page_view.upStatusBar()
         ReadBook.loadContent(resetPageOffset = false)
     }
 
     override fun onResume() {
         super.onResume()
+        ReadBook.readStartTime = System.currentTimeMillis()
         upSystemUiVisibility()
         timeBatteryReceiver = TimeBatteryReceiver.register(this)
         page_view.upTime()
@@ -246,13 +255,12 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
                     viewModel.refreshContent(it)
                 }
             }
-            R.id.menu_download -> Help.showDownloadDialog(this)
-            R.id.menu_add_bookmark -> Help.showBookMark(this)
+            R.id.menu_download -> ReadBookActivityHelp.showDownloadDialog(this)
+            R.id.menu_add_bookmark -> ReadBookActivityHelp.showBookMark(this)
             R.id.menu_copy_text ->
                 TextDialog.show(supportFragmentManager, ReadBook.curTextChapter?.getContent())
             R.id.menu_update_toc -> ReadBook.book?.let {
-                ReadBook.upMsg(getString(R.string.toc_updateing))
-                viewModel.loadChapterList(it)
+                loadChapterList(it)
             }
             R.id.menu_enable_replace -> ReadBook.book?.let {
                 it.useReplaceRule = !it.useReplaceRule
@@ -275,6 +283,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
                     Pair("loginUrl", it.loginUrl)
                 )
             }
+            R.id.menu_set_charset -> ReadBookActivityHelp.showCharsetConfig(this)
         }
         return super.onCompatOptionsItemSelected(item)
     }
@@ -381,7 +390,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
     }
 
     /**
-     * view触摸
+     * view触摸,文字选择
      */
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouch(v: View, event: MotionEvent): Boolean {
@@ -484,6 +493,10 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
                 )
                 return true
             }
+            R.id.menu_search_content -> {
+                openSearchActivity(selectedText)
+                return true
+            }
         }
         return false
     }
@@ -494,7 +507,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
     override fun onMenuActionFinally() {
         textActionMenu?.dismiss()
         page_view.curPage.cancelSelect()
-        page_view.pageDelegate?.isTextSelected = false
+        page_view.isTextSelected = false
     }
 
     /**
@@ -515,6 +528,11 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
         return false
     }
 
+    override fun loadChapterList(book: Book) {
+        ReadBook.upMsg(getString(R.string.toc_updateing))
+        viewModel.loadChapterList(book)
+    }
+
     /**
      * 内容加载完成
      */
@@ -523,6 +541,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
             intent.removeExtra("readAloud")
             ReadBook.readAloud()
         }
+        loadStates = true
     }
 
     /**
@@ -534,6 +553,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
             page_view.upContent(relativePosition, resetPageOffset)
             seek_read_page.progress = ReadBook.durPageIndex
         }
+        loadStates = false
     }
 
     /**
@@ -659,6 +679,19 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
     }
 
     /**
+     * 打开搜索界面
+     */
+    override fun openSearchActivity(searchWord: String?) {
+        ReadBook.book?.let {
+            startActivityForResult<SearchListActivity>(
+                requestCodeSearchResult,
+                Pair("bookUrl", it.bookUrl),
+                Pair("searchWord", searchWord)
+            )
+        }
+    }
+
+    /**
      * 替换规则变化
      */
     override fun onReplaceRuleSave() {
@@ -686,7 +719,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
      * 更新状态栏,导航栏
      */
     override fun upSystemUiVisibility() {
-        Help.upSystemUiVisibility(this, !read_menu.isVisible)
+        ReadBookActivityHelp.upSystemUiVisibility(window, isInMultiWindow, !read_menu.isVisible)
         upNavigationBarColor()
     }
 
@@ -738,11 +771,44 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
                 requestCodeChapterList ->
                     data?.getIntExtra("index", ReadBook.durChapterIndex)?.let { index ->
                         if (index != ReadBook.durChapterIndex) {
+                                val pageIndex = data.getIntExtra("pageIndex", 0)
+                                viewModel.openChapter(index, pageIndex)
+                            }
+                        }
+                requestCodeSearchResult ->
+                    data?.getIntExtra("index", ReadBook.durChapterIndex)?.let { index ->
+                        launch(IO){
+                            val indexWithinChapter = data.getIntExtra("indexWithinChapter", 0)
+                            val query = data.getStringExtra("query")
                             viewModel.openChapter(index)
+                            // block until load correct chapter and pages
+                            var pages = ReadBook.curTextChapter?.pages
+                            while (ReadBook.durChapterIndex != index || pages == null ){
+                                delay(100L)
+                                pages = ReadBook.curTextChapter?.pages
+                            }
+                            val positions = ReadBook.searchResultPositions(pages, indexWithinChapter, query!!)
+                            while (ReadBook.durPageIndex != positions[0]){
+                                delay(100L)
+                                ReadBook.skipToPage(positions[0])
+                            }
+                            withContext(Main){
+                                page_view.curPage.selectStartMoveIndex(0, positions[1], positions[2])
+                                delay(20L)
+                                when (positions[3]){
+                                    0 -> page_view.curPage.selectEndMoveIndex(0, positions[1], positions[2] + query.length - 1)
+                                    1 -> page_view.curPage.selectEndMoveIndex(0, positions[1] + 1, positions[4])
+                                    //todo: consider change page, jump to scroll position
+                                    -1 -> page_view.curPage.selectEndMoveIndex(1, 0, positions[4])
+                                }
+                                page_view.isTextSelected = true
+                                delay(100L)
+                            }
                         }
                     }
                 requestCodeReplace -> onReplaceRuleSave()
             }
+
         }
     }
 
@@ -847,16 +913,16 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
      */
     override fun screenOffTimerStart() {
         if (screenTimeOut < 0) {
-            Help.keepScreenOn(window, true)
+            ReadBookActivityHelp.keepScreenOn(window, true)
             return
         }
         val t = screenTimeOut - sysScreenOffTime
         if (t > 0) {
             mHandler.removeCallbacks(keepScreenRunnable)
-            Help.keepScreenOn(window, true)
+            ReadBookActivityHelp.keepScreenOn(window, true)
             mHandler.postDelayed(keepScreenRunnable, screenTimeOut)
         } else {
-            Help.keepScreenOn(window, false)
+            ReadBookActivityHelp.keepScreenOn(window, false)
         }
     }
 }

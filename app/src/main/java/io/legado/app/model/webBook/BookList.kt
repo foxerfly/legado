@@ -11,6 +11,7 @@ import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.StringUtils.wordCountFormat
+import io.legado.app.utils.htmlFormat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.isActive
@@ -24,7 +25,8 @@ object BookList {
         bookSource: BookSource,
         analyzeUrl: AnalyzeUrl,
         baseUrl: String,
-        isSearch: Boolean = true
+        variableBook: SearchBook,
+        isSearch: Boolean = true,
     ): ArrayList<SearchBook> {
         val bookList = ArrayList<SearchBook>()
         body ?: throw Exception(
@@ -35,7 +37,6 @@ object BookList {
         )
         Debug.log(bookSource.bookSourceUrl, "≡获取成功:${analyzeUrl.ruleUrl}")
         if (!scope.isActive) throw CancellationException()
-        val variableBook = SearchBook()
         val analyzeRule = AnalyzeRule(variableBook)
         analyzeRule.setContent(body, baseUrl)
         bookSource.bookUrlPattern?.let {
@@ -161,7 +162,7 @@ object BookList {
                 Debug.log(bookSource.bookSourceUrl, "└${searchBook.latestChapterTitle}")
                 if (!scope.isActive) throw CancellationException()
                 Debug.log(bookSource.bookSourceUrl, "┌获取简介")
-                searchBook.intro = analyzeRule.getString(intro)
+                searchBook.intro = analyzeRule.getString(intro).htmlFormat()
                 Debug.log(bookSource.bookSourceUrl, "└${searchBook.intro}", true)
                 if (!scope.isActive) throw CancellationException()
                 Debug.log(bookSource.bookSourceUrl, "┌获取封面链接")
@@ -221,7 +222,7 @@ object BookList {
             Debug.log(bookSource.bookSourceUrl, "└${searchBook.latestChapterTitle}", log)
             if (!scope.isActive) throw CancellationException()
             Debug.log(bookSource.bookSourceUrl, "┌获取简介", log)
-            searchBook.intro = analyzeRule.getString(ruleIntro)
+            searchBook.intro = analyzeRule.getString(ruleIntro).htmlFormat()
             Debug.log(bookSource.bookSourceUrl, "└${searchBook.intro}", log, true)
             if (!scope.isActive) throw CancellationException()
             Debug.log(bookSource.bookSourceUrl, "┌获取封面链接", log)

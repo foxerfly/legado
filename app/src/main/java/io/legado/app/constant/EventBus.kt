@@ -3,7 +3,7 @@ package io.legado.app.constant
 object EventBus {
     const val MEDIA_BUTTON = "mediaButton"
     const val RECREATE = "RECREATE"
-    const val UP_BOOK = "sourceDebugLog"
+    const val UP_BOOK = "upBookToc"
     const val ALOUD_STATE = "aloud_state"
     const val TTS_PROGRESS = "ttsStart"
     const val TTS_DS = "ttsDs"
@@ -20,4 +20,8 @@ object EventBus {
     const val WEB_SERVICE_STOP = "webServiceStop"
     const val UP_DOWNLOAD = "upDownload"
     const val SAVE_CONTENT = "saveContent"
+    const val CHECK_INIT = "checkInit"
+    const val CHECK_UP_PROGRESS = "checkProgress"
+    const val CHECK_UP_PROGRESS_STRING = "checkProgressTxt"
+    const val CHECK_DONE = "checkDone"
 }

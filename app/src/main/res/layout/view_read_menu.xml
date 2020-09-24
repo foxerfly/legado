@@ -93,6 +93,26 @@
             android:paddingEnd="32dp">
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/fabSearch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="16dp"
+                android:contentDescription="@string/search_content"
+                android:src="@drawable/ic_search"
+                android:tint="@color/primaryText"
+                android:tooltipText="@string/search_content"
+                app:backgroundTint="@color/background_menu"
+                app:elevation="2dp"
+                app:fabSize="mini"
+                app:pressedTranslationZ="2dp"
+                tools:ignore="UnusedAttribute" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/fabAutoPage"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -264,6 +284,7 @@
                         android:layout_width="0dp"
                         android:layout_height="match_parent"
                         android:layout_weight="2" />
+
                     <!--调节按钮-->
                     <LinearLayout
                         android:id="@+id/ll_read_aloud"

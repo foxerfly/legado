@@ -1,21 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <string-array name="tts_speech_per">
-        <item>度小美</item>
-        <item>度小宇</item>
-        <item>度逍遙</item>
-        <item>度丫丫</item>
-        <item>度小嬌</item>
-        <item>度米朵</item>
-        <item>度博文</item>
-        <item>度小童</item>
-        <item>度小萌</item>
-        <item>百度騷男</item>
-        <item>百度評書</item>
-        <item>百度主持</item>
-    </string-array>
-
     <string-array name="theme_mode">
         <item>跟隨系統</item>
         <item>亮色主題</item>
@@ -50,18 +35,21 @@
         <item>系統等寬字體</item>
     </string-array>
 
+    <string-array name="read_tip">
+        <item>无</item>
+        <item>标题</item>
+        <item>时间</item>
+        <item>电量</item>
+        <item>页数</item>
+        <item>进度</item>
+        <item>页数及进度</item>
+        <item>書名</item>
+    </string-array>
+
     <string-array name="text_font_weight">
         <item>正常</item>
         <item>粗體</item>
         <item>細體</item>
-    </string-array>
-
-    <string-array name="default_themes">
-        <item>极简</item>
-        <item>曜夜</item>
-        <item>经典</item>
-        <item>黑白</item>
-        <item>A屏黑</item>
     </string-array>
 
     <string-array name="language">

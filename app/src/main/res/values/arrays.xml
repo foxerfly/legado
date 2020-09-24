@@ -5,21 +5,6 @@
 		<item>@string/book_type_audio</item>
 	</string-array>
 
-	<string-array name="tts_speech_per">
-		<item>du Xiao Mei</item>
-		<item>du Xiao Yu</item>
-		<item>du Xiao Yao</item>
-		<item>du Ya Ya</item>
-		<item>du Xiao Jiao</item>
-		<item>du Mi Duo</item>
-		<item>du Bo Wen</item>
-		<item>du Xiao Tong</item>
-		<item>du Xiao Meng</item>
-		<item>baidu SaoNan</item>
-		<item>baidu PingShu</item>
-		<item>baidu ZhuChi</item>
-	</string-array>
-
 	<string-array name="indent">
 		<item>@string/indent_0</item>
 		<item>@string/indent_1</item>
@@ -63,7 +48,6 @@
 	</string-array>
 
 	<string-array name="select_folder">
-		<item>@string/default_path</item>
 		<item>@string/sys_folder_picker</item>
 		<item>@string/app_folder_picker</item>
 	</string-array>
@@ -105,20 +89,13 @@
 		<item>Pages</item>
 		<item>Progress</item>
 		<item>Pages and progress</item>
+		<item>Book name</item>
 	</string-array>
 
 	<string-array name="text_font_weight">
 		<item>Normal</item>
 		<item>Bold</item>
 		<item>Light</item>
-	</string-array>
-
-	<string-array name="default_themes">
-		<item>极简</item>
-		<item>曜夜</item>
-		<item>经典</item>
-		<item>黑白</item>
-		<item>A屏黑</item>
 	</string-array>
 
 	<string-array name="language">
