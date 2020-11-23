@@ -8,9 +8,9 @@ import android.util.AttributeSet
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
-import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
+import io.legado.app.App
 import io.legado.app.R
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.Theme
@@ -70,6 +70,13 @@ abstract class BaseActivity(
         }
         onActivityCreated(savedInstanceState)
         observeLiveBus()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            App.navigationBarHeight = navigationBarHeight
+        }
     }
 
     override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean, newConfig: Configuration?) {
@@ -142,19 +149,13 @@ abstract class BaseActivity(
 
     private fun setupSystemBar() {
         if (fullScreen && !isInMultiWindow) {
-            window.clearFlags(
-                WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS
-                        or WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION
-            )
-            window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-            window.decorView.systemUiVisibility =
-                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            ATH.fullScreen(this)
         }
         ATH.setStatusBarColorAuto(this, fullScreen)
         if (toolBarTheme == Theme.Dark) {
-            ATH.setLightStatusBar(window, false)
+            ATH.setLightStatusBar(this, false)
         } else if (toolBarTheme == Theme.Light) {
-            ATH.setLightStatusBar(window, true)
+            ATH.setLightStatusBar(this, true)
         }
         upNavigationBarColor()
     }

@@ -25,16 +25,18 @@ import io.legado.app.constant.AppPattern
 import io.legado.app.constant.EventBus
 import io.legado.app.data.entities.BookSource
 import io.legado.app.help.IntentDataHelp
-import io.legado.app.lib.dialogs.*
+import io.legado.app.help.LocalConfig
+import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.service.help.CheckSource
 import io.legado.app.ui.association.ImportBookSourceActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
-import io.legado.app.ui.filechooser.FileChooserDialog
-import io.legado.app.ui.filechooser.FilePicker
+import io.legado.app.ui.filepicker.FilePicker
+import io.legado.app.ui.filepicker.FilePickerDialog
 import io.legado.app.ui.qrcode.QrCodeActivity
 import io.legado.app.ui.widget.SelectActionBar
+import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.recycler.DragSelectTouchHelper
 import io.legado.app.ui.widget.recycler.ItemTouchCallback
 import io.legado.app.ui.widget.recycler.VerticalDivider
@@ -52,7 +54,8 @@ import java.text.Collator
 class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity_book_source),
     PopupMenu.OnMenuItemClickListener,
     BookSourceAdapter.CallBack,
-    FileChooserDialog.CallBack,
+    FilePickerDialog.CallBack,
+    SelectActionBar.CallBack,
     SearchView.OnQueryTextListener {
     override val viewModel: BookSourceViewModel
         get() = getViewModel(BookSourceViewModel::class.java)
@@ -74,6 +77,9 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
         initLiveDataBookSource()
         initLiveDataGroup()
         initSelectActionBar()
+        if (LocalConfig.isFirstOpenBookSources) {
+            showHelp()
+        }
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
@@ -153,6 +159,7 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
             R.id.menu_disabled_group -> {
                 search_view.setQuery(getString(R.string.disabled), true)
             }
+            R.id.menu_help -> showHelp()
         }
         if (item.groupId == R.id.source_group) {
             search_view.setQuery(item.title, true)
@@ -225,6 +232,11 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
         })
     }
 
+    private fun showHelp() {
+        val text = String(assets.open("help/bookSourcesHelp.md").readBytes())
+        TextDialog.show(supportFragmentManager, text, TextDialog.MD)
+    }
+
     private fun sortCheck(sortId: Int) {
         if (sort == sortId) {
             sortAscending += 1
@@ -244,33 +256,30 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
         })
     }
 
+    override fun selectAll(selectAll: Boolean) {
+        if (selectAll) {
+            adapter.selectAll()
+        } else {
+            adapter.revertSelection()
+        }
+    }
+
+    override fun revertSelection() {
+        adapter.revertSelection()
+    }
+
+    override fun onClickMainAction() {
+        alert(titleResource = R.string.draw, messageResource = R.string.sure_del) {
+            okButton { viewModel.delSelection(adapter.getSelection()) }
+            noButton()
+        }.show()
+    }
+
     private fun initSelectActionBar() {
         select_action_bar.setMainActionText(R.string.delete)
         select_action_bar.inflateMenu(R.menu.book_source_sel)
         select_action_bar.setOnMenuItemClickListener(this)
-        select_action_bar.setCallBack(object : SelectActionBar.CallBack {
-            override fun selectAll(selectAll: Boolean) {
-                if (selectAll) {
-                    adapter.selectAll()
-                } else {
-                    adapter.revertSelection()
-                }
-            }
-
-            override fun revertSelection() {
-                adapter.revertSelection()
-            }
-
-            override fun onClickMainAction() {
-                this@BookSourceActivity
-                    .alert(titleResource = R.string.draw, messageResource = R.string.sure_del) {
-                        okButton { viewModel.delSelection(adapter.getSelection()) }
-                        noButton { }
-                    }
-                    .show().applyTint()
-            }
-        })
-
+        select_action_bar.setCallBack(this)
     }
 
     override fun onMenuItemClick(item: MenuItem?): Boolean {
@@ -307,8 +316,8 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
                 }
                 CheckSource.start(this@BookSourceActivity, adapter.getSelection())
             }
-            noButton { }
-        }.show().applyTint()
+            noButton()
+        }.show()
     }
 
     @SuppressLint("InflateParams")
@@ -319,6 +328,8 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
                 layoutInflater.inflate(R.layout.dialog_edit_text, null).apply {
                     editText = edit_view
                     edit_view.setHint(R.string.group_name)
+                    edit_view.setFilterValues(groups.toList())
+                    edit_view.dropDownHeight = 180.dp
                 }
             }
             okButton {
@@ -328,8 +339,8 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
                     }
                 }
             }
-            noButton { }
-        }.show().applyTint()
+            cancelButton()
+        }.show()
     }
 
     @SuppressLint("InflateParams")
@@ -340,6 +351,8 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
                 layoutInflater.inflate(R.layout.dialog_edit_text, null).apply {
                     editText = edit_view
                     edit_view.setHint(R.string.group_name)
+                    edit_view.setFilterValues(groups.toList())
+                    edit_view.dropDownHeight = 180.dp
                 }
             }
             okButton {
@@ -349,8 +362,8 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
                     }
                 }
             }
-            noButton { }
-        }.show().applyTint()
+            cancelButton()
+        }.show()
     }
 
     private fun upGroupMenu() {
@@ -391,7 +404,7 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
                 }
             }
             cancelButton()
-        }.show().applyTint()
+        }.show()
     }
 
     override fun observeLiveBus() {
@@ -405,10 +418,8 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
             }
         }
         observeEvent<Int>(EventBus.CHECK_SOURCE_DONE) {
-            snackBar?.let {
-                it.dismiss()
-                snackBar = null
-            }
+            snackBar?.dismiss()
+            snackBar = null
             groups.map { group ->
                 if (group.contains("失效")) {
                     search_view.setQuery("失效", true)
@@ -457,18 +468,6 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
         viewModel.bottomSource(bookSource)
     }
 
-    override fun onFilePicked(requestCode: Int, currentPath: String) {
-        when (requestCode) {
-            exportRequestCode -> viewModel.exportSelection(
-                adapter.getSelection(),
-                File(currentPath)
-            )
-            importRequestCode -> {
-                startActivity<ImportBookSourceActivity>(Pair("filePath", currentPath))
-            }
-        }
-    }
-
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         when (requestCode) {
@@ -491,7 +490,7 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
             }
             exportRequestCode -> {
                 data?.data?.let { uri ->
-                    if (uri.toString().isContentPath()) {
+                    if (uri.isContentScheme()) {
                         DocumentFile.fromTreeUri(this, uri)?.let {
                             viewModel.exportSelection(adapter.getSelection(), it)
                         }

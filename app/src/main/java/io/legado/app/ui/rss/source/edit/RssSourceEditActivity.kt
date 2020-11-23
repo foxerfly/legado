@@ -20,7 +20,11 @@ import io.legado.app.lib.theme.ATH
 import io.legado.app.ui.qrcode.QrCodeActivity
 import io.legado.app.ui.rss.source.debug.RssSourceDebugActivity
 import io.legado.app.ui.widget.KeyboardToolPop
-import io.legado.app.utils.*
+import io.legado.app.ui.widget.dialog.TextDialog
+import io.legado.app.utils.GSON
+import io.legado.app.utils.getViewModel
+import io.legado.app.utils.sendToClip
+import io.legado.app.utils.shareWithQr
 import kotlinx.android.synthetic.main.activity_rss_source_edit.*
 import org.jetbrains.anko.*
 import kotlin.math.abs
@@ -49,14 +53,14 @@ class RssSourceEditActivity :
 
     override fun finish() {
         val source = getRssSource()
-        if (!source.equal(viewModel.rssSource ?: RssSource())) {
+        if (!source.equal(viewModel.rssSource)) {
             alert(R.string.exit) {
                 messageResource = R.string.exit_no_save
                 positiveButton(R.string.yes)
                 negativeButton(R.string.no) {
                     super.finish()
                 }
-            }.show().applyTint()
+            }.show()
         } else {
             super.finish()
         }
@@ -136,7 +140,7 @@ class RssSourceEditActivity :
     }
 
     private fun getRssSource(): RssSource {
-        val source = viewModel.rssSource?.copy() ?: RssSource()
+        val source = viewModel.rssSource
         source.enabled = cb_is_enable.isChecked
         source.enableJs = cb_enable_js.isChecked
         source.loadWithBaseUrl = cb_enable_base_url.isChecked
@@ -187,10 +191,31 @@ class RssSourceEditActivity :
 
     override fun sendText(text: String) {
         if (text == AppConst.keyboardToolChars[0]) {
-            insertText(AppConst.urlOption)
+            showHelpDialog()
         } else {
             insertText(text)
         }
+    }
+
+    private fun showHelpDialog() {
+        val items = arrayListOf("插入URL参数", "订阅源教程", "正则教程")
+        selector(getString(R.string.help), items) { _, index ->
+            when (index) {
+                0 -> insertText(AppConst.urlOption)
+                1 -> showSourceHelp()
+                2 -> showRegexHelp()
+            }
+        }
+    }
+
+    private fun showSourceHelp() {
+        val mdText = String(assets.open("help/sourceHelp.md").readBytes())
+        TextDialog.show(supportFragmentManager, mdText, TextDialog.MD)
+    }
+
+    private fun showRegexHelp() {
+        val mdText = String(assets.open("help/regexHelp.md").readBytes())
+        TextDialog.show(supportFragmentManager, mdText, TextDialog.MD)
     }
 
     private fun showKeyboardTopPopupWindow() {

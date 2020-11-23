@@ -12,15 +12,13 @@ import androidx.preference.Preference
 import io.legado.app.App
 import io.legado.app.R
 import io.legado.app.base.BasePreferenceFragment
+import io.legado.app.constant.AppConst
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.AppConfig
 import io.legado.app.help.LauncherIconHelp
 import io.legado.app.help.ThemeConfig
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.customView
-import io.legado.app.lib.dialogs.noButton
-import io.legado.app.lib.dialogs.okButton
 import io.legado.app.lib.theme.ATH
 import io.legado.app.ui.widget.number.NumberPickerDialog
 import io.legado.app.ui.widget.prefs.ColorPreference
@@ -161,7 +159,7 @@ class ThemeConfigFragment : BasePreferenceFragment(),
                 .setMinValue(0)
                 .setValue(AppConfig.elevation)
                 .setCustomButton((R.string.btn_default_s)) {
-                    AppConfig.elevation = AppConfig.sysElevation
+                    AppConfig.elevation = AppConst.sysElevation
                     recreateActivities()
                 }
                 .show {
@@ -195,8 +193,8 @@ class ThemeConfigFragment : BasePreferenceFragment(),
                     }
                 }
             }
-            noButton { }
-        }.show().applyTint()
+            noButton()
+        }.show()
     }
 
     private fun upTheme(isNightTheme: Boolean) {

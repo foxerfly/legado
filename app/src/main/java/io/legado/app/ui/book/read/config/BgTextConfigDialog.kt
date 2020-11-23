@@ -17,13 +17,13 @@ import io.legado.app.help.ReadBookConfig
 import io.legado.app.help.http.HttpHelper
 import io.legado.app.help.permission.Permissions
 import io.legado.app.help.permission.PermissionsCompat
-import io.legado.app.lib.dialogs.*
+import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.lib.theme.getSecondaryTextColor
 import io.legado.app.ui.book.read.ReadBookActivity
-import io.legado.app.ui.filechooser.FileChooserDialog
-import io.legado.app.ui.filechooser.FilePicker
+import io.legado.app.ui.filepicker.FilePicker
+import io.legado.app.ui.filepicker.FilePickerDialog
 import io.legado.app.ui.widget.text.AutoCompleteTextView
 import io.legado.app.utils.*
 import kotlinx.android.synthetic.main.dialog_edit_text.view.*
@@ -33,7 +33,7 @@ import org.jetbrains.anko.sdk27.listeners.onCheckedChange
 import org.jetbrains.anko.sdk27.listeners.onClick
 import java.io.File
 
-class BgTextConfigDialog : BaseDialogFragment(), FileChooserDialog.CallBack {
+class BgTextConfigDialog : BaseDialogFragment(), FilePickerDialog.CallBack {
 
     companion object {
         const val TEXT_COLOR = 121
@@ -67,6 +67,7 @@ class BgTextConfigDialog : BaseDialogFragment(), FileChooserDialog.CallBack {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
+        (activity as ReadBookActivity).bottomDialog++
         return inflater.inflate(R.layout.dialog_read_bg_text, container)
     }
 
@@ -79,6 +80,7 @@ class BgTextConfigDialog : BaseDialogFragment(), FileChooserDialog.CallBack {
     override fun onDismiss(dialog: DialogInterface) {
         super.onDismiss(dialog)
         ReadBookConfig.save()
+        (activity as ReadBookActivity).bottomDialog--
     }
 
     private fun initView() {
@@ -131,7 +133,7 @@ class BgTextConfigDialog : BaseDialogFragment(), FileChooserDialog.CallBack {
                     }
                 }
                 cancelButton()
-            }.show().applyTint()
+            }.show()
         }
         sw_dark_status_icon.onCheckedChange { buttonView, isChecked ->
             if (buttonView?.isPressed == true) {
@@ -248,7 +250,7 @@ class BgTextConfigDialog : BaseDialogFragment(), FileChooserDialog.CallBack {
             }
             val configZipPath = FileUtils.getPath(requireContext().eCacheDir, configFileName)
             if (ZipUtils.zipFiles(exportFiles, File(configZipPath))) {
-                if (uri.isContentPath()) {
+                if (uri.isContentScheme()) {
                     DocumentFile.fromTreeUri(requireContext(), uri)?.let { treeDoc ->
                         treeDoc.findFile(configFileName)?.delete()
                         treeDoc.createFile("", configFileName)
@@ -283,8 +285,8 @@ class BgTextConfigDialog : BaseDialogFragment(), FileChooserDialog.CallBack {
                     importNetConfig(url)
                 }
             }
-            noButton { }
-        }.show().applyTint()
+            noButton()
+        }.show()
     }
 
     private fun importNetConfig(url: String) {
@@ -369,13 +371,6 @@ class BgTextConfigDialog : BaseDialogFragment(), FileChooserDialog.CallBack {
         }
     }
 
-    override fun onFilePicked(requestCode: Int, currentPath: String) {
-        when (requestCode) {
-            requestCodeImport -> importConfig(Uri.fromFile(File(currentPath)))
-            requestCodeExport -> exportConfig(Uri.fromFile(File(currentPath)))
-        }
-    }
-
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         when (requestCode) {
@@ -398,7 +393,7 @@ class BgTextConfigDialog : BaseDialogFragment(), FileChooserDialog.CallBack {
     }
 
     private fun setBgFromUri(uri: Uri) {
-        if (uri.toString().isContentPath()) {
+        if (uri.toString().isContentScheme()) {
             val doc = DocumentFile.fromSingleUri(requireContext(), uri)
             doc?.name?.let {
                 val file =

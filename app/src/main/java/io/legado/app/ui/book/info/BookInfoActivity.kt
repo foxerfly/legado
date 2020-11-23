@@ -51,7 +51,7 @@ class BookInfoActivity :
     ChangeCoverDialog.CallBack {
 
     private val requestCodeChapterList = 568
-    private val requestCodeSourceEdit = 562
+    private val requestCodeInfoEdit = 562
     private val requestCodeRead = 432
 
     override val viewModel: BookInfoViewModel
@@ -65,6 +65,7 @@ class BookInfoActivity :
         scroll_view.setBackgroundColor(backgroundColor)
         fl_action.setBackgroundColor(bottomBackground)
         tv_shelf.setTextColor(getPrimaryTextColor(ColorUtils.isColorLight(bottomBackground)))
+        tv_toc.text = getString(R.string.toc_s, getString(R.string.loading))
         viewModel.bookData.observe(this, { showBook(it) })
         viewModel.chapterListData.observe(this, { upLoading(false, it) })
         viewModel.initData(intent)
@@ -82,7 +83,7 @@ class BookInfoActivity :
                 if (viewModel.inBookshelf) {
                     viewModel.bookData.value?.let {
                         startActivityForResult<BookInfoEditActivity>(
-                            requestCodeSourceEdit,
+                            requestCodeInfoEdit,
                             Pair("bookUrl", it.bookUrl)
                         )
                     }
@@ -106,6 +107,9 @@ class BookInfoActivity :
                     viewModel.loadBookInfo(it, false)
                 }
             }
+            R.id.menu_copy_url -> viewModel.bookData.value?.bookUrl?.let {
+                sendToClip(it)
+            } ?: toast(R.string.no_book)
             R.id.menu_can_update -> {
                 if (viewModel.inBookshelf) {
                     viewModel.bookData.value?.let {
@@ -133,7 +137,6 @@ class BookInfoActivity :
         tv_author.text = getString(R.string.author_show, book.getRealAuthor())
         tv_origin.text = getString(R.string.origin_show, book.originName)
         tv_lasted.text = getString(R.string.lasted_show, book.latestChapterTitle)
-        tv_toc.text = getString(R.string.toc_s, getString(R.string.loading))
         tv_intro.text = book.getDisplayIntro()
         upTvBookshelf()
         val kinds = book.getKindList()
@@ -368,7 +371,7 @@ class BookInfoActivity :
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         when (requestCode) {
-            requestCodeSourceEdit ->
+            requestCodeInfoEdit ->
                 if (resultCode == Activity.RESULT_OK) {
                     viewModel.upEditBook()
                 }

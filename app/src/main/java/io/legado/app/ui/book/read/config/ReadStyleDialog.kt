@@ -52,6 +52,7 @@ class ReadStyleDialog : BaseDialogFragment(), FontSelectDialog.CallBack {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
+        (activity as ReadBookActivity).bottomDialog++
         return inflater.inflate(R.layout.dialog_read_book_style, container)
     }
 
@@ -64,6 +65,7 @@ class ReadStyleDialog : BaseDialogFragment(), FontSelectDialog.CallBack {
     override fun onDismiss(dialog: DialogInterface) {
         super.onDismiss(dialog)
         ReadBookConfig.save()
+        (activity as ReadBookActivity).bottomDialog--
     }
 
     private fun initView() {
@@ -190,7 +192,7 @@ class ReadStyleDialog : BaseDialogFragment(), FontSelectDialog.CallBack {
                     }
                 }
             customView = rootView
-        }.show().applyTint()
+        }.show()
     }
 
     private fun changeBg(index: Int) {

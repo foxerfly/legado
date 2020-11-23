@@ -197,7 +197,6 @@
     <string name="book">書</string>
     <string name="volume_key_page">音量鍵翻頁</string>
     <string name="click_turn_page">點擊翻頁</string>
-    <string name="click_all_next_page">點擊總是翻下一頁</string>
     <string name="page_anim">翻頁動畫</string>
     <string name="keep_light">螢幕超時</string>
     <string name="back">返回</string>
@@ -484,7 +483,7 @@
     <string name="no_book_name">未獲取到書名</string>
     <string name="input_replace_url">輸入取代規則網址</string>
     <string name="get_book_list_success">搜尋列表獲取成功%d</string>
-    <string name="non_null_source_name_url">書源名稱和URL不能為空</string>
+    <string name="non_null_name_url">名稱和URL不能為空</string>
     <string name="gallery">圖庫</string>
     <string name="get_ali_pay_hb">領支付寶紅包</string>
     <string name="non_update_url">沒有獲取到更新地址</string>
@@ -619,7 +618,8 @@
     <string name="service_start">正在啟動服務\n具體訊息查看通知欄</string>
     <string name="default_path">預設路徑</string>
     <string name="sys_folder_picker">系統資料夾選擇器</string>
-    <string name="app_folder_picker">自帶選擇器\n(Android10以上因權限限制可能無法使用)</string>
+    <string name="app_folder_picker">自帶資料夾選擇器</string>
+    <string name="app_file_picker">自帶資料夾選擇器</string>
     <string name="a10_permission_toast">Android10以上因權限限制可能無法讀寫文件</string>
     <string name="add_to_text_context_menu_s">長按文字在操作選單中顯示閱讀·搜尋</string>
     <string name="add_to_text_context_menu_t">文字操作顯示搜尋</string>
@@ -731,6 +731,7 @@
     <string name="read_config">閱讀介面設定</string>
     <string name="rule_image_style">圖片樣式(imageStyle)</string>
     <string name="rule_replace_regex">取代規則(replaceRegex)</string>
+    <string name="rule_font_js">字体处理js</string>
     <string name="group_name">分組名稱</string>
     <string name="note_content">備註內容</string>
     <string name="replace_enable_default_t">預設啟用取代淨化</string>
@@ -775,5 +776,15 @@
     <string name="auto_clear_expired_summary">超过一天的搜索数据</string>
     <string name="re_segment">重新分段</string>
     <string name="style_name">样式名称:</string>
+    <string name="empty_msg_import_book">点击右上角文件夹图标,选择文件夹</string>
+    <string name="scan_folder">智能扫描</string>
+    <string name="copy_url">拷贝URL</string>
+    <string name="no_book">没有书籍</string>
+    <string name="keep_original_name">保留原名</string>
+    <string name="click_regional_config">点击区域设置</string>
+    <string name="colse">关闭</string>
+    <string name="next_page">下一页</string>
+    <string name="prev_page">上一页</string>
+    <string name="non_action">无操作</string>
 
 </resources>

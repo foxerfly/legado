@@ -16,10 +16,13 @@ import io.legado.app.constant.AppConst
 import io.legado.app.constant.EventBus
 import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.ui.widget.KeyboardToolPop
+import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.getViewModel
 import io.legado.app.utils.postEvent
 import kotlinx.android.synthetic.main.activity_replace_edit.*
 import org.jetbrains.anko.displayMetrics
+import org.jetbrains.anko.sdk27.listeners.onClick
+import org.jetbrains.anko.selector
 import org.jetbrains.anko.toast
 import kotlin.math.abs
 
@@ -58,10 +61,12 @@ class ReplaceEditActivity :
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         mSoftKeyboardTool = KeyboardToolPop(this, AppConst.keyboardToolChars, this)
         window.decorView.viewTreeObserver.addOnGlobalLayoutListener(this)
-        viewModel.replaceRuleData.observe(this, {
+        viewModel.initData(intent) {
             upReplaceView(it)
-        })
-        viewModel.initData(intent)
+        }
+        iv_help.onClick {
+            showRegexHelp()
+        }
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
@@ -96,7 +101,7 @@ class ReplaceEditActivity :
     }
 
     private fun getReplaceRule(): ReplaceRule {
-        val replaceRule: ReplaceRule = viewModel.replaceRuleData.value ?: ReplaceRule()
+        val replaceRule: ReplaceRule = viewModel.replaceRule ?: ReplaceRule()
         replaceRule.name = et_name.text.toString()
         replaceRule.group = et_group.text.toString()
         replaceRule.pattern = et_replace_rule.text.toString()
@@ -112,22 +117,37 @@ class ReplaceEditActivity :
         if (view is EditText) {
             val start = view.selectionStart
             val end = view.selectionEnd
-            val edit = view.editableText//获取EditText的文字
+            //TODO 获取EditText的文字
+            val edit = view.editableText
             if (start < 0 || start >= edit.length) {
                 edit.append(text)
             } else {
-                edit.replace(start, end, text)//光标所在位置插入文字
+                //TODO 光标所在位置插入文字
+                edit.replace(start, end, text)
             }
         }
     }
 
     override fun sendText(text: String) {
         if (text == AppConst.keyboardToolChars[0]) {
-            val view = window?.decorView?.findFocus()
-            view?.clearFocus()
+            showHelpDialog()
         } else {
             insertText(text)
         }
+    }
+
+    private fun showHelpDialog() {
+        val items = arrayListOf("正则教程")
+        selector(getString(R.string.help), items) { _, index ->
+            when (index) {
+                0 -> showRegexHelp()
+            }
+        }
+    }
+
+    private fun showRegexHelp() {
+        val mdText = String(assets.open("help/regexHelp.md").readBytes())
+        TextDialog.show(supportFragmentManager, mdText, TextDialog.MD)
     }
 
     private fun showKeyboardTopPopupWindow() {

@@ -10,10 +10,12 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.widget.FrameLayout
+import io.legado.app.help.AppConfig
 import io.legado.app.help.ReadBookConfig
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.service.help.ReadBook
 import io.legado.app.ui.book.read.page.delegate.*
+import io.legado.app.ui.book.read.page.entities.PageDirection
 import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.utils.activity
@@ -71,8 +73,18 @@ class PageView(context: Context, attrs: AttributeSet) :
     private var firstCharIndex: Int = 0
 
     val slopSquare by lazy { ViewConfiguration.get(context).scaledTouchSlop }
-    private val centerRectF = RectF(width * 0.33f, height * 0.33f, width * 0.66f, height * 0.66f)
-    private val autoPageRect by lazy { Rect() }
+    private val tlRect = RectF(10F, 10F, width * 0.33f, height * 0.33f)
+    private val tcRect = RectF(width * 0.33f, 10F, width * 0.66f, height * 0.33f)
+    private val trRect = RectF(width * 0.36f, 10F, width - 10f, height * 0.33f)
+    private val mlRect = RectF(10F, height * 0.33f, width * 0.33f, height * 0.66f)
+    private val mcRect = RectF(width * 0.33f, height * 0.33f, width * 0.66f, height * 0.66f)
+    private val mrRect = RectF(width * 0.66f, height * 0.33f, width - 10f, height * 0.66f)
+    private val blRect = RectF(10F, height * 0.66f, width * 0.33f, height - 10f)
+    private val bcRect = RectF(width * 0.33f, height * 0.66f, width * 0.66f, height - 10f)
+    private val brRect = RectF(width * 0.66f, height * 0.66f, width - 10f, height - 10f)
+    private val autoPageRect by lazy {
+        Rect()
+    }
     private val autoPagePint by lazy {
         Paint().apply {
             color = context.accentColor
@@ -90,10 +102,18 @@ class PageView(context: Context, attrs: AttributeSet) :
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        centerRectF.set(width * 0.33f, height * 0.33f, width * 0.66f, height * 0.66f)
+        tlRect.set(10F, 10F, width * 0.33f, height * 0.33f)
+        tcRect.set(width * 0.33f, 10F, width * 0.66f, height * 0.33f)
+        trRect.set(width * 0.36f, 10F, width - 10f, height * 0.33f)
+        mlRect.set(10F, height * 0.33f, width * 0.33f, height * 0.66f)
+        mcRect.set(width * 0.33f, height * 0.33f, width * 0.66f, height * 0.66f)
+        mrRect.set(width * 0.66f, height * 0.33f, width - 10f, height * 0.66f)
+        blRect.set(10F, height * 0.66f, width * 0.33f, height - 10f)
+        bcRect.set(width * 0.33f, height * 0.66f, width * 0.66f, height - 10f)
+        brRect.set(width * 0.66f, height * 0.66f, width - 10f, height - 10f)
         prevPage.x = -w.toFloat()
         pageDelegate?.setViewSize(w, h)
-        if (oldw != 0 && oldh != 0) {
+        if (w != 0 && h != 0) {
             ReadBook.loadContent(resetPageOffset = false)
         }
     }
@@ -101,10 +121,10 @@ class PageView(context: Context, attrs: AttributeSet) :
     override fun dispatchDraw(canvas: Canvas) {
         super.dispatchDraw(canvas)
         pageDelegate?.onDraw(canvas)
-        if (callBack.isAutoPage) {
+        if (callBack.isAutoPage && !isScroll) {
             nextPage.screenshot()?.let {
                 val bottom =
-                    page_view.height * callBack.autoPageProgress / (ReadBookConfig.autoReadSpeed * 10)
+                    page_view.height * callBack.autoPageProgress / (ReadBookConfig.autoReadSpeed * 50)
                 autoPageRect.set(0, 0, page_view.width, bottom)
                 canvas.drawBitmap(it, autoPageRect, autoPageRect, null)
                 canvas.drawRect(
@@ -238,23 +258,47 @@ class PageView(context: Context, attrs: AttributeSet) :
     /**
      * 单击
      */
-    private fun onSingleTapUp(): Boolean {
-        if (isTextSelected) {
-            isTextSelected = false
-            return true
-        }
-        if (centerRectF.contains(startX, startY)) {
-            if (!isAbortAnim) {
-                callBack.clickCenter()
+    private fun onSingleTapUp() {
+        when {
+            isTextSelected -> isTextSelected = false
+            mcRect.contains(startX, startY) -> if (!isAbortAnim) {
+                click(AppConfig.clickActionMC)
             }
-        } else if (ReadBookConfig.clickTurnPage) {
-            if (startX > width / 2 || ReadBookConfig.clickAllNext) {
-                pageDelegate?.nextPageByAnim(defaultAnimationSpeed)
-            } else {
-                pageDelegate?.prevPageByAnim(defaultAnimationSpeed)
+            bcRect.contains(startX, startY) -> {
+                click(AppConfig.clickActionBC)
+            }
+            blRect.contains(startX, startY) -> {
+                click(AppConfig.clickActionBL)
+            }
+            brRect.contains(startX, startY) -> {
+                click(AppConfig.clickActionBR)
+            }
+            mlRect.contains(startX, startY) -> {
+                click(AppConfig.clickActionML)
+            }
+            mrRect.contains(startX, startY) -> {
+                click(AppConfig.clickActionMR)
+            }
+            tlRect.contains(startX, startY) -> {
+                click(AppConfig.clickActionTL)
+            }
+            tcRect.contains(startX, startY) -> {
+                click(AppConfig.clickActionTC)
+            }
+            trRect.contains(startX, startY) -> {
+                click(AppConfig.clickActionTR)
             }
         }
-        return true
+    }
+
+    private fun click(action: Int) {
+        when (action) {
+            0 -> callBack.showActionMenu()
+            1 -> pageDelegate?.nextPageByAnim(defaultAnimationSpeed)
+            2 -> pageDelegate?.prevPageByAnim(defaultAnimationSpeed)
+            3 -> ReadBook.moveToNextChapter(true)
+            4 -> ReadBook.moveToPrevChapter(upContent = true, toLast = false)
+        }
     }
 
     /**
@@ -296,12 +340,12 @@ class PageView(context: Context, attrs: AttributeSet) :
         curPage.cancelSelect()
     }
 
-    fun fillPage(direction: PageDelegate.Direction) {
+    fun fillPage(direction: PageDirection) {
         when (direction) {
-            PageDelegate.Direction.PREV -> {
+            PageDirection.PREV -> {
                 pageFactory.moveToPrev(true)
             }
-            PageDelegate.Direction.NEXT -> {
+            PageDirection.NEXT -> {
                 pageFactory.moveToNext(true)
             }
             else -> Unit
@@ -330,17 +374,18 @@ class PageView(context: Context, attrs: AttributeSet) :
     }
 
     override fun upContent(relativePosition: Int, resetPageOffset: Boolean) {
+        curPage.setContentDescription(pageFactory.curData.textPage.text)
         if (isScroll && !callBack.isAutoPage) {
-            curPage.setContent(pageFactory.currentPage, resetPageOffset)
+            curPage.setContent(pageFactory.curData, resetPageOffset)
         } else {
             curPage.resetPageOffset()
             when (relativePosition) {
-                -1 -> prevPage.setContent(pageFactory.prevPage)
-                1 -> nextPage.setContent(pageFactory.nextPage)
+                -1 -> prevPage.setContent(pageFactory.prevData)
+                1 -> nextPage.setContent(pageFactory.nextData)
                 else -> {
-                    curPage.setContent(pageFactory.currentPage)
-                    nextPage.setContent(pageFactory.nextPage)
-                    prevPage.setContent(pageFactory.prevPage)
+                    curPage.setContent(pageFactory.curData)
+                    nextPage.setContent(pageFactory.nextData)
+                    prevPage.setContent(pageFactory.prevData)
                 }
             }
         }
@@ -408,7 +453,7 @@ class PageView(context: Context, attrs: AttributeSet) :
         val isInitFinish: Boolean
         val isAutoPage: Boolean
         val autoPageProgress: Int
-        fun clickCenter()
+        fun showActionMenu()
         fun screenOffTimerStart()
         fun showTextActionMenu()
     }

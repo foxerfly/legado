@@ -22,9 +22,12 @@ import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
+import io.legado.app.ui.filepicker.FilePicker
+import io.legado.app.ui.filepicker.FilePickerDialog
 import io.legado.app.ui.login.SourceLogin
 import io.legado.app.ui.qrcode.QrCodeActivity
 import io.legado.app.ui.widget.KeyboardToolPop
+import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.*
 import kotlinx.android.synthetic.main.activity_book_source_edit.*
 import org.jetbrains.anko.*
@@ -32,11 +35,13 @@ import kotlin.math.abs
 
 class BookSourceEditActivity :
     VMBaseActivity<BookSourceEditViewModel>(R.layout.activity_book_source_edit, false),
+    FilePickerDialog.CallBack,
     KeyboardToolPop.CallBack {
     override val viewModel: BookSourceEditViewModel
         get() = getViewModel(BookSourceEditViewModel::class.java)
 
     private val qrRequestCode = 101
+    private val selectPathRequestCode = 102
     private val adapter = BookSourceEditAdapter()
     private val sourceEntities: ArrayList<EditEntity> = ArrayList()
     private val searchEntities: ArrayList<EditEntity> = ArrayList()
@@ -63,7 +68,7 @@ class BookSourceEditActivity :
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.menu_save -> getSource().let { source ->
-                if (!source.equal(viewModel.bookSource ?: BookSource())){
+                if (!source.equal(viewModel.bookSource ?: BookSource())) {
                     source.lastUpdateTime = System.currentTimeMillis()
                 }
                 if (checkSource(source)) {
@@ -81,7 +86,10 @@ class BookSourceEditActivity :
             R.id.menu_paste_source -> viewModel.pasteSource { upRecyclerView(it) }
             R.id.menu_qr_code_camera -> startActivityForResult<QrCodeActivity>(qrRequestCode)
             R.id.menu_share_str -> share(GSON.toJson(getSource()))
-            R.id.menu_share_qr -> shareWithQr(getString(R.string.share_book_source), GSON.toJson(getSource()))
+            R.id.menu_share_qr -> shareWithQr(
+                getString(R.string.share_book_source),
+                GSON.toJson(getSource())
+            )
             R.id.menu_rule_summary -> {
                 try {
                     val intent = Intent(Intent.ACTION_VIEW)
@@ -138,7 +146,7 @@ class BookSourceEditActivity :
                 negativeButton(R.string.no) {
                     super.finish()
                 }
-            }.show().applyTint()
+            }.show()
         } else {
             super.finish()
         }
@@ -228,6 +236,7 @@ class BookSourceEditActivity :
             add(EditEntity("webJs", cr?.webJs, R.string.rule_web_js))
             add(EditEntity("sourceRegex", cr?.sourceRegex, R.string.rule_source_regex))
             add(EditEntity("replaceRegex", cr?.replaceRegex, R.string.rule_replace_regex))
+            add(EditEntity("fontJs", cr?.fontJs, R.string.rule_font_js))
             add(EditEntity("imageStyle", cr?.imageStyle, R.string.rule_image_style))
         }
         //发现
@@ -331,6 +340,7 @@ class BookSourceEditActivity :
                 "webJs" -> contentRule.webJs = it.value
                 "sourceRegex" -> contentRule.sourceRegex = it.value
                 "replaceRegex" -> contentRule.replaceRegex = it.value
+                "fontJs" -> contentRule.fontJs = it.value
                 "imageStyle" -> contentRule.imageStyle = it.value
             }
         }
@@ -344,7 +354,7 @@ class BookSourceEditActivity :
 
     private fun checkSource(source: BookSource): Boolean {
         if (source.bookSourceUrl.isBlank() || source.bookSourceName.isBlank()) {
-            toast("书源名称和URL不能为空")
+            toast(R.string.non_null_name_url)
             return false
         }
         return true
@@ -367,10 +377,32 @@ class BookSourceEditActivity :
 
     override fun sendText(text: String) {
         if (text == AppConst.keyboardToolChars[0]) {
-            insertText(AppConst.urlOption)
+            showHelpDialog()
         } else {
             insertText(text)
         }
+    }
+
+    private fun showHelpDialog() {
+        val items = arrayListOf("插入URL参数", "书源教程", "正则教程", "选择文件")
+        selector(getString(R.string.help), items) { _, index ->
+            when (index) {
+                0 -> insertText(AppConst.urlOption)
+                1 -> showSourceHelp()
+                2 -> showRegexHelp()
+                3 -> FilePicker.selectFile(this, selectPathRequestCode)
+            }
+        }
+    }
+
+    private fun showSourceHelp() {
+        val mdText = String(assets.open("help/sourceHelp.md").readBytes())
+        TextDialog.show(supportFragmentManager, mdText, TextDialog.MD)
+    }
+
+    private fun showRegexHelp() {
+        val mdText = String(assets.open("help/regexHelp.md").readBytes())
+        TextDialog.show(supportFragmentManager, mdText, TextDialog.MD)
     }
 
     private fun showKeyboardTopPopupWindow() {
@@ -393,6 +425,15 @@ class BookSourceEditActivity :
                 data?.getStringExtra("result")?.let {
                     viewModel.importSource(it) { source ->
                         upRecyclerView(source)
+                    }
+                }
+            }
+            selectPathRequestCode -> if (resultCode == RESULT_OK) {
+                data?.data?.let { uri ->
+                    if (uri.isContentScheme()) {
+                        sendText(uri.toString())
+                    } else {
+                        sendText(uri.path.toString())
                     }
                 }
             }

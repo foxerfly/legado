@@ -4,12 +4,13 @@ import android.os.Parcelable
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import io.legado.app.App
 import io.legado.app.constant.AppConst
+import io.legado.app.help.AppConfig
+import io.legado.app.help.CacheManager
 import io.legado.app.help.JsExtensions
+import io.legado.app.help.http.CookieStore
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
-import io.legado.app.utils.getPrefString
 import kotlinx.android.parcel.Parcelize
 import java.util.*
 import javax.script.SimpleBindings
@@ -54,7 +55,7 @@ data class RssSource(
 
     @Throws(Exception::class)
     fun getHeaderMap() = HashMap<String, String>().apply {
-        this[AppConst.UA_NAME] = App.INSTANCE.getPrefString("user_agent") ?: AppConst.userAgent
+        this[AppConst.UA_NAME] = AppConfig.userAgent
         header?.let {
             GSON.fromJsonObject<Map<String, String>>(
                 when {
@@ -77,6 +78,8 @@ data class RssSource(
     private fun evalJS(jsStr: String): Any? {
         val bindings = SimpleBindings()
         bindings["java"] = this
+        bindings["cookie"] = CookieStore
+        bindings["cache"] = CacheManager
         return AppConst.SCRIPT_ENGINE.eval(jsStr, bindings)
     }
 

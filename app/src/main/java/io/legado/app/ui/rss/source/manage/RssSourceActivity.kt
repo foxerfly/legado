@@ -20,12 +20,12 @@ import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.entities.RssSource
 import io.legado.app.help.IntentDataHelp
-import io.legado.app.lib.dialogs.*
+import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.ui.association.ImportRssSourceActivity
-import io.legado.app.ui.filechooser.FileChooserDialog
-import io.legado.app.ui.filechooser.FilePicker
+import io.legado.app.ui.filepicker.FilePicker
+import io.legado.app.ui.filepicker.FilePickerDialog
 import io.legado.app.ui.qrcode.QrCodeActivity
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
 import io.legado.app.ui.widget.SelectActionBar
@@ -47,7 +47,8 @@ import java.util.*
 
 class RssSourceActivity : VMBaseActivity<RssSourceViewModel>(R.layout.activity_rss_source),
     PopupMenu.OnMenuItemClickListener,
-    FileChooserDialog.CallBack,
+    FilePickerDialog.CallBack,
+    SelectActionBar.CallBack,
     RssSourceAdapter.CallBack {
 
     override val viewModel: RssSourceViewModel
@@ -153,35 +154,34 @@ class RssSourceActivity : VMBaseActivity<RssSourceViewModel>(R.layout.activity_r
         })
     }
 
+    override fun selectAll(selectAll: Boolean) {
+        if (selectAll) {
+            adapter.selectAll()
+        } else {
+            adapter.revertSelection()
+        }
+    }
+
+    override fun revertSelection() {
+        adapter.revertSelection()
+    }
+
+    override fun onClickMainAction() {
+        delSourceDialog()
+    }
+
     private fun initViewEvent() {
         select_action_bar.setMainActionText(R.string.delete)
         select_action_bar.inflateMenu(R.menu.rss_source_sel)
         select_action_bar.setOnMenuItemClickListener(this)
-        select_action_bar.setCallBack(object : SelectActionBar.CallBack {
-            override fun selectAll(selectAll: Boolean) {
-                if (selectAll) {
-                    adapter.selectAll()
-                } else {
-                    adapter.revertSelection()
-                }
-            }
-
-            override fun revertSelection() {
-                adapter.revertSelection()
-            }
-
-            override fun onClickMainAction() {
-                delSourceDialog()
-            }
-        })
+        select_action_bar.setCallBack(this)
     }
 
     private fun delSourceDialog() {
         alert(titleResource = R.string.draw, messageResource = R.string.sure_del) {
             okButton { viewModel.delSelection(adapter.getSelection()) }
-            noButton { }
-        }
-            .show().applyTint()
+            noButton()
+        }.show()
     }
 
     private fun upGroupMenu() {
@@ -242,19 +242,7 @@ class RssSourceActivity : VMBaseActivity<RssSourceViewModel>(R.layout.activity_r
                 }
             }
             cancelButton()
-        }.show().applyTint()
-    }
-
-    override fun onFilePicked(requestCode: Int, currentPath: String) {
-        when (requestCode) {
-            importRequestCode -> {
-                startActivity<ImportRssSourceActivity>("filePath" to currentPath)
-            }
-            exportRequestCode -> viewModel.exportSelection(
-                adapter.getSelection(),
-                File(currentPath)
-            )
-        }
+        }.show()
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -279,7 +267,7 @@ class RssSourceActivity : VMBaseActivity<RssSourceViewModel>(R.layout.activity_r
             }
             exportRequestCode -> if (resultCode == RESULT_OK) {
                 data?.data?.let { uri ->
-                    if (uri.toString().isContentPath()) {
+                    if (uri.isContentScheme()) {
                         DocumentFile.fromTreeUri(this, uri)?.let {
                             viewModel.exportSelection(adapter.getSelection(), it)
                         }

@@ -1,7 +1,58 @@
 # 更新日志
-* 关注公众号 **[开源阅读]()** 菜单•软件下载 提前享受新版本。
-* 关注合作公众号 **[小说拾遗]()** 获取好看的小说。
+* 关注公众号 **[开源阅读]** 菜单•软件下载 提前享受新版本。
+* 关注合作公众号 **[小说拾遗]** 获取好看的小说。
 * 旧版数据导入教程：先在旧版阅读(2.x)中进行备份，然后在新版阅读(3.x)【我的】->【备份与恢复】，选择【导入旧版本数据】。
+
+**2020/11/22**
+* 正文字体处理规则修改,只能写js,不需要js标记
+```
+var b64=String(result).match(/ttf;base64,([^\)]+)/);
+var f1 = java.queryBase64TTF(b64[1])
+var f2 = java.queryTTF("/storage/emulated/0/Fonts/Source Han Sans CN Regular.ttf")
+java.replaceFont(content, f1, f2, 58000,59000)
+```
+
+**2020/11/18**
+* 优化导航栏
+* js添加java.log(msg: String)用于调试时输出消息
+* js添加cookie变量,方法见io.legado.app.help.http.api.CookieManager
+* js添加cache变量,可以用来存储token之类的临时值,可以设置保存时间,方法见io.legado.app.help.CacheManager
+* 需要token的网站可以用js来写了,比如阿里tts
+
+**2020/11/16**
+* 修复导出添加替换净化引起的bug
+
+**2020/11/15**
+* 正文规则添加字体规则,返回ByteArray
+* js添加方法:
+```
+base64DecodeToByteArray(str: String?): ByteArray?
+base64DecodeToByteArray(str: String?, flags: Int): ByteArray?
+```
+* 导出添加替换净化
+* 修复正文内容TalkBack不对的bug,优化视障使用体验
+
+**2020/11/08**
+* 优化书源,订阅源导入,添加保持原名选项
+* 优化使用体验,初次使用是自动弹出帮助文档
+* 添加阅读界面的点击区域设置
+* 滚动翻页时自动翻页也采用滚动模式
+
+**2020/11/07**
+* 详情页菜单添加拷贝URL
+* 解决一些书名太长缓存报错的bug
+* 添加备份搜索记录
+* 替换编辑界面添加正则学习教程
+* 去除解析目录时拼接相对url,提升解析速度
+* 自动分段优化 by [tumuyan](https://github.com/tumuyan)
+* web支持图片显示 by [六月](https://github.com/Celeter)
+
+**2020/11/01**
+* 导入本地添加智能扫描,菜单-智能扫描,扫描当前文件夹包括子文件夹下所有文件
+
+**2020/10/30**
+* 修复bug
+* 优化Android 11文件选择,本地导入
 
 **2020/10/28**
 * 修复SDK 30使用TTS问题

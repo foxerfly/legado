@@ -200,7 +200,6 @@
     <string name="book">Book</string>
     <string name="volume_key_page">Volume keys to turn page</string>
     <string name="click_turn_page">Tap screen to turn page</string>
-    <string name="click_all_next_page">Tap screen always to next page</string>
     <string name="page_anim">Flip animation</string>
     <string name="keep_light">Keep screen awake</string>
     <string name="back">Back</string>
@@ -422,6 +421,7 @@
     <string name="rule_web_js">webJs</string>
     <string name="rule_source_regex">资源正则(sourceRegex)</string>
     <string name="rule_replace_regex">替换规则(replaceRegex)</string>
+    <string name="rule_font_js">字体处理js</string>
     <string name="rule_image_style">图片样式(imageStyle)</string>
 
     <string name="source_icon">图标(sourceIcon)</string>
@@ -493,7 +493,7 @@
     <string name="no_book_name">No bookName</string>
     <string name="input_replace_url">Input replacement rule URL</string>
     <string name="get_book_list_success">Search list obtained successfully%d</string>
-    <string name="non_null_source_name_url">Source name and URL cannot be empty</string>
+    <string name="non_null_name_url">name and URL cannot be empty</string>
     <string name="gallery">Gallery</string>
     <string name="get_ali_pay_hb">get AliPay red envelopes</string>
     <string name="non_update_url">No update address</string>
@@ -628,7 +628,8 @@
     <string name="service_start">Starting service\nChecking notification bar for details</string>
     <string name="default_path">Default path</string>
     <string name="sys_folder_picker">System folder picker</string>
-    <string name="app_folder_picker">App folder picker\n(Android 10+ May not be available due to permission restrictions)</string>
+    <string name="app_folder_picker">App folder picker</string>
+    <string name="app_file_picker">App file picker</string>
     <string name="a10_permission_toast">Android 10+ unable to read and write file due to permission restrictions</string>
     <string name="add_to_text_context_menu_s">Long tap to display Legado·Search in the operation menu</string>
     <string name="add_to_text_context_menu_t">Text operation display Search</string>
@@ -781,5 +782,15 @@
     <string name="auto_clear_expired_summary">超过一天的搜索数据</string>
     <string name="re_segment">重新分段</string>
     <string name="style_name">样式名称:</string>
+    <string name="empty_msg_import_book">点击右上角文件夹图标,选择文件夹</string>
+    <string name="scan_folder">智能扫描</string>
+    <string name="copy_url">拷贝URL</string>
+    <string name="no_book">没有书籍</string>
+    <string name="keep_original_name">保留原名</string>
+    <string name="click_regional_config">点击区域设置</string>
+    <string name="colse">关闭</string>
+    <string name="next_page">下一页</string>
+    <string name="prev_page">上一页</string>
+    <string name="non_action">无操作</string>
 
 </resources>

@@ -13,7 +13,10 @@ import io.legado.app.R
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.entities.*
-import io.legado.app.help.*
+import io.legado.app.help.DefaultData
+import io.legado.app.help.LauncherIconHelp
+import io.legado.app.help.ReadBookConfig
+import io.legado.app.help.ThemeConfig
 import io.legado.app.service.help.ReadBook
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.utils.*
@@ -52,7 +55,6 @@ object Restore {
 
     //默认忽略keys
     private val ignorePrefKeys = arrayOf(
-        PreferKey.versionCode,
         PreferKey.defaultCover
     )
     private val readPrefKeys = arrayOf(
@@ -73,7 +75,7 @@ object Restore {
 
     suspend fun restore(context: Context, path: String) {
         withContext(IO) {
-            if (path.isContentPath()) {
+            if (path.isContentScheme()) {
                 DocumentFile.fromTreeUri(context, Uri.parse(path))?.listFiles()?.forEach { doc ->
                     for (fileName in Backup.backupFileNames) {
                         if (doc.name == fileName) {
@@ -128,6 +130,9 @@ object Restore {
             }
             fileToListT<ReplaceRule>(path, "replaceRule.json")?.let {
                 App.db.replaceRuleDao().insert(*it.toTypedArray())
+            }
+            fileToListT<SearchKeyword>(path, "searchHistory.json")?.let {
+                App.db.searchKeywordDao().insert(*it.toTypedArray())
             }
             fileToListT<TxtTocRule>(path, DefaultData.txtTocRuleFileName)?.let {
                 App.db.txtTocRule().insert(*it.toTypedArray())
@@ -204,7 +209,6 @@ object Restore {
                     }
                 }
                 edit.apply()
-                AppConfig.upConfig()
             }
             ReadBookConfig.apply {
                 styleSelect = App.INSTANCE.getPrefInt(PreferKey.readStyleSelect)

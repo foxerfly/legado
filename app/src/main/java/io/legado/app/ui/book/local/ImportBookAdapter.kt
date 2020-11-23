@@ -15,11 +15,14 @@ class ImportBookAdapter(context: Context, val callBack: CallBack) :
     SimpleRecyclerAdapter<DocItem>(context, R.layout.item_import_book) {
     var selectedUris = hashSetOf<String>()
     var checkableCount = 0
-    private var bookshelf = arrayListOf<String>()
+    private var bookFileNames = arrayListOf<String>()
 
-    fun upBookHas(uriList: List<String>) {
-        bookshelf.clear()
-        bookshelf.addAll(uriList)
+    fun upBookHas(bookUrls: List<String>) {
+        bookFileNames.clear()
+        bookUrls.forEach {
+            val path = Uri.decode(it)
+            bookFileNames.add(FileUtils.getName(path))
+        }
         notifyDataSetChanged()
         upCheckableCount()
     }
@@ -32,7 +35,7 @@ class ImportBookAdapter(context: Context, val callBack: CallBack) :
     private fun upCheckableCount() {
         checkableCount = 0
         getItems().forEach {
-            if (!it.isDir && !bookshelf.contains(it.uri.toString())) {
+            if (!it.isDir && !bookFileNames.contains(it.uri.toString())) {
                 checkableCount++
             }
         }
@@ -42,7 +45,7 @@ class ImportBookAdapter(context: Context, val callBack: CallBack) :
     fun selectAll(selectAll: Boolean) {
         if (selectAll) {
             getItems().forEach {
-                if (!it.isDir && !bookshelf.contains(it.uri.toString())) {
+                if (!it.isDir && !bookFileNames.contains(it.uri.toString())) {
                     selectedUris.add(it.uri.toString())
                 }
             }
@@ -66,6 +69,14 @@ class ImportBookAdapter(context: Context, val callBack: CallBack) :
         callBack.upCountView()
     }
 
+    fun removeSelection() {
+        for (i in getItems().lastIndex downTo 0) {
+            if (getItem(i)?.uri.toString() in selectedUris) {
+                removeItem(i)
+            }
+        }
+    }
+
     override fun convert(holder: ItemViewHolder, item: DocItem, payloads: MutableList<Any>) {
         holder.itemView.apply {
             if (payloads.isEmpty()) {
@@ -76,7 +87,7 @@ class ImportBookAdapter(context: Context, val callBack: CallBack) :
                     ll_brief.gone()
                     cb_select.isChecked = false
                 } else {
-                    if (bookshelf.contains(item.uri.toString())) {
+                    if (bookFileNames.contains(item.name)) {
                         iv_icon.setImageResource(R.drawable.ic_book_has)
                         iv_icon.visible()
                         cb_select.invisible()
@@ -102,7 +113,7 @@ class ImportBookAdapter(context: Context, val callBack: CallBack) :
             getItem(holder.layoutPosition)?.let {
                 if (it.isDir) {
                     callBack.nextDoc(it.uri)
-                } else if (!bookshelf.contains(it.uri.toString())) {
+                } else if (!bookFileNames.contains(it.name)) {
                     if (!selectedUris.contains(it.uri.toString())) {
                         selectedUris.add(it.uri.toString())
                     } else {

@@ -10,10 +10,12 @@ import java.util.regex.Pattern
 
 @Suppress("unused", "MemberVisibilityCanBePrivate")
 object NetworkUtils {
+
     fun getUrl(response: Response<*>): String {
-        val networkResponse = response.raw().networkResponse()
-        return networkResponse?.request()?.url()?.toString()
-            ?: response.raw().request().url().toString()
+        response.raw().networkResponse()?.let {
+            return it.request().url().toString()
+        }
+        return response.raw().request().url().toString()
     }
 
     private val notNeedEncoding: BitSet by lazy {
@@ -78,10 +80,27 @@ object NetworkUtils {
     fun getAbsoluteURL(baseURL: String?, relativePath: String?): String? {
         if (baseURL.isNullOrEmpty()) return relativePath
         if (relativePath.isNullOrEmpty()) return baseURL
+        if (relativePath.isAbsUrl()) return relativePath
         var relativeUrl = relativePath
         try {
             val absoluteUrl = URL(baseURL.substringBefore(","))
             val parseUrl = URL(absoluteUrl, relativePath)
+            relativeUrl = parseUrl.toString()
+            return relativeUrl
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return relativeUrl
+    }
+
+    /**
+     * 获取绝对地址
+     */
+    fun getAbsoluteURL(baseURL: URL?, relativePath: String): String? {
+        if (baseURL == null) return relativePath
+        var relativeUrl = relativePath
+        try {
+            val parseUrl = URL(baseURL, relativePath)
             relativeUrl = parseUrl.toString()
             return relativeUrl
         } catch (e: Exception) {
@@ -98,14 +117,13 @@ object NetworkUtils {
         } else url.substring(0, index)
     }
 
-   fun getSubDomain(url: String?): String {
-        var baseUrl = getBaseUrl(url)
-        if (baseUrl == null) return ""
+    fun getSubDomain(url: String?): String {
+        val baseUrl = getBaseUrl(url) ?: return ""
         return if (baseUrl.indexOf(".") == baseUrl.lastIndexOf(".")) {
-            baseUrl.substring(baseUrl.lastIndexOf("/")+1)
-        } else baseUrl.substring(baseUrl.indexOf(".")+1)
+            baseUrl.substring(baseUrl.lastIndexOf("/") + 1)
+        } else baseUrl.substring(baseUrl.indexOf(".") + 1)
     }
-    
+
     /**
      * Get local Ip address.
      */

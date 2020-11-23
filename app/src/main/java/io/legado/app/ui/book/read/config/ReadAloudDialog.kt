@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read.config
 
+import android.content.DialogInterface
 import android.os.Bundle
 import android.view.*
 import android.widget.SeekBar
@@ -12,6 +13,7 @@ import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.service.help.ReadAloud
 import io.legado.app.service.help.ReadBook
+import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.observeEvent
@@ -36,11 +38,17 @@ class ReadAloudDialog : BaseDialogFragment() {
         }
     }
 
+    override fun onDismiss(dialog: DialogInterface) {
+        super.onDismiss(dialog)
+        (activity as ReadBookActivity).bottomDialog--
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
+        (activity as ReadBookActivity).bottomDialog++
         callBack = activity as? CallBack
         return inflater.inflate(R.layout.dialog_read_aloud, container)
     }
