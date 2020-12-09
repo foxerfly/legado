@@ -152,6 +152,7 @@
     <string name="set_timer">定时</string>
     <string name="read_aloud_pause">朗读暂停</string>
     <string name="read_aloud_timer">正在朗读(还剩%d分钟)</string>
+    <string name="playing_timer">正在播放(还剩%d分钟)</string>
     <string name="ps_hide_navigation_bar">阅读界面隐藏虚拟按键</string>
     <string name="pt_hide_navigation_bar">隐藏导航栏</string>
     <string name="re_navigation_bar_color">导航栏颜色</string>
@@ -200,6 +201,7 @@
     <string name="volume_key_page">音量键翻页</string>
     <string name="click_turn_page">点击翻页</string>
     <string name="page_anim">翻页动画</string>
+    <string name="book_page_anim">翻页动画(本书)</string>
     <string name="keep_light">屏幕超时</string>
     <string name="back">返回</string>
     <string name="menu">菜单</string>
@@ -349,7 +351,7 @@
     <string name="sort">排序</string>
     <string name="sort_auto">智能排序</string>
     <string name="sort_manual">手动排序</string>
-    <string name="sort_pin_yin">拼音排序</string>
+    <string name="sort_name">名称排序</string>
     <string name="go_to_top">滚动到顶部</string>
     <string name="go_to_bottom">滚动到底部</string>
     <string name="read_y">已读: %s</string>
@@ -408,6 +410,7 @@
     <string name="book_url_pattern">书籍URL正则(bookUrlPattern)</string>
     <string name="rule_book_info_init">预处理规则(bookInfoInit)</string>
     <string name="rule_toc_url">目录URL规则(tocUrl)</string>
+    <string name="rule_can_re_name">允许修改书名作者(canReName)</string>
     <string name="rule_next_toc_url">目录下一页规则(nextTocUrl)</string>
     <string name="rule_chapter_list">目录列表规则(chapterList)</string>
     <string name="rule_chapter_name">章节名称规则(ChapterName)</string>
@@ -416,10 +419,9 @@
     <string name="rule_update_time">更新时间(ChapterInfo)</string>
     <string name="rule_book_content">正文规则(content)</string>
     <string name="rule_next_content">正文下一页URL规则(nextContentUrl)</string>
-    <string name="rule_web_js">webJs</string>
+    <string name="rule_web_js">WebViewJs(webJs)</string>
     <string name="rule_image_style">图片样式(imageStyle)</string>
     <string name="rule_replace_regex">替换规则(replaceRegex)</string>
-    <string name="rule_font_js">字体处理js</string>
     <string name="rule_source_regex">资源正则(sourceRegex)</string>
 
     <string name="source_icon">图标(sourceIcon)</string>
@@ -454,7 +456,7 @@
     <string name="source_http_header">请求头(header)</string>
     <string name="debug_source">调试源</string>
     <string name="import_by_qr_code">二维码导入</string>
-    <string name="share_selected_source">分享选中书源</string>
+    <string name="share_selected_source">分享选中源</string>
     <string name="scan_qr_code">扫描二维码</string>
     <string name="click_on_selected_show_menu">选中时点击可弹出菜单</string>
     <string name="theme">主题</string>
@@ -601,8 +603,6 @@
     <string name="change_cover_source">封面换源</string>
     <string name="select_local_image">选择本地图片</string>
     <string name="book_type">类型:</string>
-    <string name="book_type_text">文本</string>
-    <string name="book_type_audio">音频</string>
     <string name="to_backstage">后台</string>
     <string name="importing">正在导入</string>
     <string name="exporting">正在导出</string>
@@ -690,8 +690,6 @@
     <string name="click_to_apply">点击加入</string>
     <string name="middle">中</string>
     <string name="information">信息</string>
-    <string name="hideHeader">隐藏页眉</string>
-    <string name="hideFooter">隐藏页脚</string>
     <string name="switchLayout">切换布局</string>
     <string name="text_font_weight_converter">文章字重切换</string>
 
@@ -789,5 +787,10 @@
     <string name="next_page">下一页</string>
     <string name="prev_page">上一页</string>
     <string name="non_action">无操作</string>
+    <string name="body_title">正文标题</string>
+    <string name="show_hide">显示/隐藏</string>
+    <string name="header_footer">页眉<![CDATA[&]]>页脚</string>
+    <string name="rule_subscription">规则订阅</string>
+    <string name="rule_sub_empty_msg">添加大佬们提供的规则导入地址\n添加后点击可导入规则</string>
 
 </resources>

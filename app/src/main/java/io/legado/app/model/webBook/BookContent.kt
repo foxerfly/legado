@@ -45,7 +45,7 @@ object BookContent {
             val nextChapterUrl = if (!nextChapterUrlF.isNullOrEmpty())
                 nextChapterUrlF
             else
-                App.db.bookChapterDao().getChapter(book.bookUrl, bookChapter.index + 1)?.url
+                App.db.bookChapterDao.getChapter(book.bookUrl, bookChapter.index + 1)?.url
             while (nextUrl.isNotEmpty() && !nextUrlList.contains(nextUrl)) {
                 if (!nextChapterUrl.isNullOrEmpty()
                     && NetworkUtils.getAbsoluteURL(baseUrl, nextUrl)
@@ -92,14 +92,9 @@ object BookContent {
         }
         content.deleteCharAt(content.length - 1)
         var contentStr = content.toString().htmlFormat()
-        val fontJs = contentRule.fontJs
-        if (!fontJs.isNullOrBlank()) {
-            contentStr = analyzeRule.evalJS(fontJs, body, contentStr)?.toString() ?: ""
-        }
         val replaceRegex = contentRule.replaceRegex
         if (!replaceRegex.isNullOrEmpty()) {
-            analyzeRule.setContent(contentStr)
-            contentStr = analyzeRule.getString(replaceRegex)
+            contentStr = analyzeRule.getString(replaceRegex, value = contentStr)
         }
         Debug.log(bookSource.bookSourceUrl, "┌获取章节名称")
         Debug.log(bookSource.bookSourceUrl, "└${bookChapter.title}")
