@@ -14,7 +14,6 @@ import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.annotation.CallSuper
 import androidx.core.app.NotificationCompat
-import io.legado.app.App
 import io.legado.app.R
 import io.legado.app.base.BaseService
 import io.legado.app.constant.*
@@ -27,6 +26,7 @@ import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.postEvent
+import splitties.init.appCtx
 
 abstract class BaseReadAloudService : BaseService(),
     AudioManager.OnAudioFocusChangeListener {
@@ -75,6 +75,7 @@ abstract class BaseReadAloudService : BaseService(),
         postEvent(EventBus.ALOUD_STATE, Status.STOP)
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_STOPPED)
         mediaSessionCompat.release()
+        ReadBook.uploadProgress()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -140,6 +141,7 @@ abstract class BaseReadAloudService : BaseService(),
         upNotification()
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PAUSED)
         postEvent(EventBus.ALOUD_STATE, Status.PAUSE)
+        ReadBook.uploadProgress()
     }
 
     @CallSuper
@@ -231,7 +233,7 @@ abstract class BaseReadAloudService : BaseService(),
                 Intent(
                     Intent.ACTION_MEDIA_BUTTON,
                     null,
-                    App.INSTANCE,
+                    appCtx,
                     MediaButtonReceiver::class.java
                 ),
                 PendingIntent.FLAG_CANCEL_CURRENT

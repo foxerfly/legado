@@ -16,13 +16,13 @@ import android.os.Looper
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.core.app.NotificationCompat
-import io.legado.app.App
 import io.legado.app.R
 import io.legado.app.base.BaseService
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.IntentAction
 import io.legado.app.constant.Status
+import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.IntentHelp
 import io.legado.app.help.MediaHelp
@@ -31,10 +31,11 @@ import io.legado.app.receiver.MediaButtonReceiver
 import io.legado.app.service.help.AudioPlay
 import io.legado.app.ui.audio.AudioPlayActivity
 import io.legado.app.utils.postEvent
+import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.jetbrains.anko.toast
+import splitties.init.appCtx
 
 
 class AudioPlayService : BaseService(),
@@ -120,7 +121,7 @@ class AudioPlayService : BaseService(),
     private fun play() {
         upNotification()
         if (requestFocus()) {
-            try {
+            kotlin.runCatching {
                 AudioPlay.status = Status.STOP
                 postEvent(EventBus.AUDIO_STATE, Status.STOP)
                 mediaPlayer.reset()
@@ -130,10 +131,10 @@ class AudioPlayService : BaseService(),
                 mediaPlayer.setDataSource(this, uri, analyzeUrl.headerMap)
                 mediaPlayer.prepareAsync()
                 handler.removeCallbacks(mpRunnable)
-            } catch (e: Exception) {
-                e.printStackTrace()
+            }.onFailure {
+                it.printStackTrace()
                 launch {
-                    toast("$url ${e.localizedMessage}")
+                    toastOnUi("$url ${it.localizedMessage}")
                     stopSelf()
                 }
             }
@@ -219,7 +220,7 @@ class AudioPlayService : BaseService(),
         if (!mediaPlayer.isPlaying) {
             AudioPlay.status = Status.STOP
             postEvent(EventBus.AUDIO_STATE, Status.STOP)
-            launch { toast("error: $what $extra $url") }
+            launch { toastOnUi("error: $what $extra $url") }
         }
         return true
     }
@@ -270,11 +271,11 @@ class AudioPlayService : BaseService(),
                 val book = AudioPlay.book
                 val webBook = AudioPlay.webBook
                 if (book != null && webBook != null) {
-                    webBook.getContent(book, chapter, scope = this@AudioPlayService)
+                    webBook.getContent(this@AudioPlayService, book, chapter)
                         .onSuccess { content ->
                             if (content.isEmpty()) {
                                 withContext(Main) {
-                                    toast("未获取到资源链接")
+                                    toastOnUi("未获取到资源链接")
                                 }
                             } else {
                                 contentLoadFinish(chapter, content)
@@ -286,7 +287,7 @@ class AudioPlayService : BaseService(),
                         }
                 } else {
                     removeLoading(chapter.index)
-                    toast("book or source is null")
+                    toastOnUi("book or source is null")
                 }
             }
         }
@@ -321,7 +322,7 @@ class AudioPlayService : BaseService(),
         execute {
             AudioPlay.book?.let {
                 AudioPlay.durChapterPos = mediaPlayer.currentPosition
-                App.db.bookDao.upProgress(it.bookUrl, AudioPlay.durChapterPos)
+                appDb.bookDao.upProgress(it.bookUrl, AudioPlay.durChapterPos)
             }
         }
     }
@@ -370,7 +371,7 @@ class AudioPlayService : BaseService(),
                 Intent(
                     Intent.ACTION_MEDIA_BUTTON,
                     null,
-                    App.INSTANCE,
+                    appCtx,
                     MediaButtonReceiver::class.java
                 ),
                 PendingIntent.FLAG_CANCEL_CURRENT

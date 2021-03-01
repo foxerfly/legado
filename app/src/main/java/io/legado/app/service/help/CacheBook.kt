@@ -2,7 +2,6 @@ package io.legado.app.service.help
 
 import android.content.Context
 import android.content.Intent
-import io.legado.app.App
 import io.legado.app.R
 import io.legado.app.constant.IntentAction
 import io.legado.app.data.entities.Book
@@ -10,6 +9,8 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.service.CacheBookService
 import io.legado.app.utils.msg
+import kotlinx.coroutines.CoroutineScope
+import splitties.init.appCtx
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArraySet
 
@@ -61,6 +62,7 @@ object CacheBook {
     }
 
     fun download(
+        scope: CoroutineScope,
         webBook: WebBook,
         book: Book,
         chapter: BookChapter,
@@ -73,13 +75,13 @@ object CacheBook {
             downloadMap[book.bookUrl] = CopyOnWriteArraySet()
         }
         downloadMap[book.bookUrl]?.add(chapter.index)
-        webBook.getContent(book, chapter)
+        webBook.getContent(scope, book, chapter)
             .onSuccess { content ->
                 if (ReadBook.book?.bookUrl == book.bookUrl) {
                     ReadBook.contentLoadFinish(
                         book,
                         chapter,
-                        content.ifBlank { App.INSTANCE.getString(R.string.content_empty) },
+                        content.ifBlank { appCtx.getString(R.string.content_empty) },
                         resetPageOffset = resetPageOffset
                     )
                 }

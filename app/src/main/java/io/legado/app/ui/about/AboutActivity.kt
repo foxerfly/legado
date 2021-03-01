@@ -12,7 +12,7 @@ import io.legado.app.databinding.ActivityAboutBinding
 import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.utils.openUrl
-import org.jetbrains.anko.share
+import io.legado.app.utils.share
 
 
 class AboutActivity : BaseActivity<ActivityAboutBinding>() {
@@ -30,7 +30,7 @@ class AboutActivity : BaseActivity<ActivityAboutBinding>() {
             .replace(R.id.fl_fragment, aboutFragment, fTag)
             .commit()
         binding.tvAppSummary.post {
-            try {
+            kotlin.runCatching {
                 val span = ForegroundColorSpan(accentColor)
                 val spannableString = SpannableString(binding.tvAppSummary.text)
                 val gzh = getString(R.string.legado_gzh)
@@ -40,8 +40,6 @@ class AboutActivity : BaseActivity<ActivityAboutBinding>() {
                     Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
                 binding.tvAppSummary.text = spannableString
-            } catch (e: Exception) {
-                e.printStackTrace()
             }
         }
     }

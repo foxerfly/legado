@@ -7,13 +7,15 @@ import android.view.View
 import androidx.annotation.StringRes
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
-import io.legado.app.App
 import io.legado.app.R
+import io.legado.app.constant.appInfo
+import io.legado.app.help.AppConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.openUrl
 import io.legado.app.utils.sendMail
 import io.legado.app.utils.sendToClip
+import io.legado.app.utils.toastOnUi
 
 class AboutFragment : PreferenceFragmentCompat() {
 
@@ -23,19 +25,24 @@ class AboutFragment : PreferenceFragmentCompat() {
         Pair("(QQ群VIP1)701903217", "-iolizL4cbJSutKRpeImHlXlpLDZnzeF"),
         Pair("(QQ群VIP2)263949160", "xwfh7_csb2Gf3Aw2qexEcEtviLfLfd4L"),
         Pair("(QQ群VIP3)680280282", "_N0i7yZObjKSeZQvzoe2ej7j02kLnOOK"),
+        Pair("(QQ群VIP4)682555679", "VF2UwvUCuaqlo6pddWTe_kw__a1_Fr8O"),
         Pair("(QQ群1)805192012", "6GlFKjLeIk5RhQnR3PNVDaKB6j10royo"),
         Pair("(QQ群2)773736122", "5Bm5w6OgLupXnICbYvbgzpPUgf0UlsJF"),
         Pair("(QQ群3)981838750", "g_Sgmp2nQPKqcZQ5qPcKLHziwX_mpps9"),
         Pair("(QQ群4)256929088", "czEJPLDnT4Pd9SKQ6RoRVzKhDxLchZrO"),
         Pair("(QQ群5)811843556", "zKZ2UYGZ7o5CzcA6ylxzlqi21si_iqaX"),
         Pair("(QQ群6)870270970", "FeCF8iSxfQbe90HPvGsvcqs5P5oSeY5n"),
-        Pair("(QQ群7)15987187", "S2g2TMD0LGd3sefUADd1AbyPEW2o2XfC")
+        Pair("(QQ群7)15987187", "S2g2TMD0LGd3sefUADd1AbyPEW2o2XfC"),
+        Pair("(QQ群8)1079926194", "gg2qFH8q9IPFaCHV3H7CqCN-YljvazE1"),
     )
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         addPreferencesFromResource(R.xml.about)
-        findPreference<Preference>("check_update")?.summary =
-            "${getString(R.string.version)} ${App.versionName}"
+        findPreference<Preference>("update_log")?.summary =
+            "${getString(R.string.version)} ${appInfo.versionName}"
+        if (AppConfig.isGooglePlay) {
+            preferenceScreen.removePreferenceRecursively("check_update")
+        }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -57,6 +64,7 @@ class AboutFragment : PreferenceFragmentCompat() {
             "qq" -> showQqGroups()
             "gzGzh" -> requireContext().sendToClip(getString(R.string.legado_gzh))
             "tg" -> openUrl(R.string.tg_url)
+            "discord" -> openUrl(R.string.discord_url)
         }
         return super.onPreferenceTreeClick(preference)
     }
@@ -93,12 +101,13 @@ class AboutFragment : PreferenceFragmentCompat() {
             Uri.parse("mqqopensdkapi://bizAgent/qm/qr?url=http%3A%2F%2Fqm.qq.com%2Fcgi-bin%2Fqm%2Fqr%3Ffrom%3Dapp%26p%3Dandroid%26k%3D$key")
         // 此Flag可根据具体产品需要自定义，如设置，则在加群界面按返回，返回手Q主界面，不设置，按返回会返回到呼起产品界面
         // intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        return try {
+        kotlin.runCatching {
             startActivity(intent)
-            true
-        } catch (e: java.lang.Exception) {
-            false
+            return true
+        }.onFailure {
+            toastOnUi("添加失败,请手动添加")
         }
+        return false
     }
 
 }

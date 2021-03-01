@@ -2,16 +2,18 @@ package io.legado.app.ui.book.read.page.entities
 
 import android.text.Layout
 import android.text.StaticLayout
-import io.legado.app.App
 import io.legado.app.R
 import io.legado.app.help.ReadBookConfig
+import io.legado.app.service.help.ReadBook
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
+import splitties.init.appCtx
 import java.text.DecimalFormat
+import kotlin.math.min
 
 @Suppress("unused")
 data class TextPage(
     var index: Int = 0,
-    var text: String = App.INSTANCE.getString(R.string.data_loading),
+    var text: String = appCtx.getString(R.string.data_loading),
     var title: String = "",
     val textLines: ArrayList<TextLine> = arrayListOf(),
     var pageSize: Int = 0,
@@ -22,6 +24,12 @@ data class TextPage(
 
     val lineSize get() = textLines.size
     val charSize get() = text.length
+
+    fun getLine(index: Int): TextLine {
+        return textLines.getOrElse(index) {
+            textLines.last()
+        }
+    }
 
     fun upLinesPosition() = ChapterProvider.apply {
         if (!ReadBookConfig.textBottomJustify) return@apply
@@ -123,4 +131,31 @@ data class TextPage(
             return percent
         }
 
+    fun getSelectStartLength(lineIndex: Int, charIndex: Int): Int {
+        var length = 0
+        val maxIndex = min(lineIndex, lineSize)
+        for (index in 0 until maxIndex) {
+            length += textLines[index].charSize
+        }
+        return length + charIndex
+    }
+
+    fun getTextChapter(): TextChapter? {
+        ReadBook.curTextChapter?.let {
+            if (it.position == chapterIndex) {
+                return it
+            }
+        }
+        ReadBook.nextTextChapter?.let {
+            if (it.position == chapterIndex) {
+                return it
+            }
+        }
+        ReadBook.prevTextChapter?.let {
+            if (it.position == chapterIndex) {
+                return it
+            }
+        }
+        return null
+    }
 }

@@ -5,11 +5,11 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.ViewGroup
-import io.legado.app.App
 import io.legado.app.R
 import io.legado.app.base.BaseActivity
 import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.base.adapter.SimpleRecyclerAdapter
+import io.legado.app.base.adapter.RecyclerAdapter
+import io.legado.app.data.appDb
 import io.legado.app.data.entities.ReadRecordShow
 import io.legado.app.databinding.ActivityReadRecordBinding
 import io.legado.app.databinding.ItemReadRecordBinding
@@ -19,7 +19,6 @@ import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.jetbrains.anko.sdk27.listeners.onClick
 import java.util.*
 
 class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
@@ -59,10 +58,10 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
         readRecord.tvBookName.setText(R.string.all_read_time)
         adapter = RecordAdapter(this@ReadRecordActivity)
         recyclerView.adapter = adapter
-        readRecord.ivRemove.onClick {
+        readRecord.tvRemove.setOnClickListener {
             alert(R.string.delete, R.string.sure_del) {
                 okButton {
-                    App.db.readRecordDao.clear()
+                    appDb.readRecordDao.clear()
                     initData()
                 }
                 noButton()
@@ -72,11 +71,11 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
 
     private fun initData() {
         launch(IO) {
-            val allTime = App.db.readRecordDao.allTime
+            val allTime = appDb.readRecordDao.allTime
             withContext(Main) {
                 binding.readRecord.tvReadTime.text = formatDuring(allTime)
             }
-            var readRecords = App.db.readRecordDao.allShow
+            var readRecords = appDb.readRecordDao.allShow
             readRecords = when (sortMode) {
                 1 -> readRecords.sortedBy { it.readTime }
                 else -> {
@@ -92,7 +91,7 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
     }
 
     inner class RecordAdapter(context: Context) :
-        SimpleRecyclerAdapter<ReadRecordShow, ItemReadRecordBinding>(context) {
+        RecyclerAdapter<ReadRecordShow, ItemReadRecordBinding>(context) {
 
         override fun getViewBinding(parent: ViewGroup): ItemReadRecordBinding {
             return ItemReadRecordBinding.inflate(inflater, parent, false)
@@ -112,18 +111,23 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
 
         override fun registerListener(holder: ItemViewHolder, binding: ItemReadRecordBinding) {
             binding.apply {
-                ivRemove.onClick {
-                    alert(R.string.delete, R.string.sure_del) {
-                        okButton {
-                            getItem(holder.layoutPosition)?.let {
-                                App.db.readRecordDao.deleteByName(it.bookName)
-                                initData()
-                            }
-                        }
-                        noButton()
-                    }.show()
+                tvRemove.setOnClickListener {
+                    getItem(holder.layoutPosition)?.let { item ->
+                        sureDelAlert(item)
+                    }
                 }
             }
+        }
+
+        private fun sureDelAlert(item: ReadRecordShow) {
+            alert(R.string.delete) {
+                setMessage(getString(R.string.sure_del_any, item.bookName))
+                okButton {
+                    appDb.readRecordDao.deleteByName(item.bookName)
+                    initData()
+                }
+                noButton()
+            }.show()
         }
 
     }
@@ -137,7 +141,11 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
         val h = if (hours > 0) "${hours}小时" else ""
         val m = if (minutes > 0) "${minutes}分钟" else ""
         val s = if (seconds > 0) "${seconds}秒" else ""
-        return "$d$h$m$s"
+        var time = "$d$h$m$s"
+        if (time.isBlank()) {
+            time = "0秒"
+        }
+        return time
     }
 
 }

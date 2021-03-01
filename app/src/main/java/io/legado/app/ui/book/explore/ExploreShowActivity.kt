@@ -1,7 +1,7 @@
 package io.legado.app.ui.book.explore
 
 import android.os.Bundle
-import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.activity.viewModels
 import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
@@ -12,13 +12,12 @@ import io.legado.app.databinding.ViewLoadMoreBinding
 import io.legado.app.ui.book.info.BookInfoActivity
 import io.legado.app.ui.widget.recycler.LoadMoreView
 import io.legado.app.ui.widget.recycler.VerticalDivider
-import io.legado.app.utils.getViewModel
-import org.jetbrains.anko.startActivity
+import io.legado.app.utils.startActivity
 
 class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreShowViewModel>(),
     ExploreShowAdapter.CallBack {
     override val viewModel: ExploreShowViewModel
-        get() = getViewModel(ExploreShowViewModel::class.java)
+            by viewModels()
 
     private lateinit var adapter: ExploreShowAdapter
     private lateinit var loadMoreView: LoadMoreView
@@ -31,13 +30,15 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         binding.titleBar.title = intent.getStringExtra("exploreName")
         initRecyclerView()
-        viewModel.booksData.observe(this, { upData(it) })
+        viewModel.booksData.observe(this) { upData(it) }
         viewModel.initData(intent)
+        viewModel.errorLiveData.observe(this) {
+            loadMoreView.error(it)
+        }
     }
 
     private fun initRecyclerView() {
         adapter = ExploreShowAdapter(this, this)
-        binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.addItemDecoration(VerticalDivider(this))
         binding.recyclerView.adapter = adapter
         loadMoreView = LoadMoreView(this)
@@ -76,7 +77,9 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
             loadMoreView.noMore(getString(R.string.empty))
         } else if (books.isEmpty()) {
             loadMoreView.noMore()
-        } else if (adapter.getItems().contains(books.first()) && adapter.getItems().contains(books.last())) {
+        } else if (adapter.getItems().contains(books.first()) && adapter.getItems()
+                .contains(books.last())
+        ) {
             loadMoreView.noMore()
         } else {
             adapter.addItems(books)
@@ -84,9 +87,9 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
     }
 
     override fun showBookInfo(book: Book) {
-        startActivity<BookInfoActivity>(
-            Pair("name", book.name),
-            Pair("author", book.author)
-        )
+        startActivity<BookInfoActivity> {
+            putExtra("name", book.name)
+            putExtra("author", book.author)
+        }
     }
 }

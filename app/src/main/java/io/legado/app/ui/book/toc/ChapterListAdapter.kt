@@ -4,16 +4,16 @@ import android.content.Context
 import android.view.ViewGroup
 import io.legado.app.R
 import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.base.adapter.SimpleRecyclerAdapter
+import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.databinding.ItemChapterListBinding
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.utils.getCompatColor
 import io.legado.app.utils.visible
-import org.jetbrains.anko.sdk27.listeners.onClick
+
 
 class ChapterListAdapter(context: Context, val callback: Callback) :
-    SimpleRecyclerAdapter<BookChapter, ItemChapterListBinding>(context) {
+    RecyclerAdapter<BookChapter, ItemChapterListBinding>(context) {
 
     val cacheFileNames = hashSetOf<String>()
 
@@ -49,7 +49,7 @@ class ChapterListAdapter(context: Context, val callback: Callback) :
     }
 
     override fun registerListener(holder: ItemViewHolder, binding: ItemChapterListBinding) {
-        holder.itemView.onClick {
+        holder.itemView.setOnClickListener {
             getItem(holder.layoutPosition)?.let {
                 callback.openChapter(it)
             }

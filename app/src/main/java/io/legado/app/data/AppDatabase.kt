@@ -6,12 +6,16 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import io.legado.app.App
 import io.legado.app.constant.AppConst
+import io.legado.app.constant.androidId
 import io.legado.app.data.dao.*
 import io.legado.app.data.entities.*
+import splitties.init.appCtx
 import java.util.*
 
+val appDb by lazy {
+    AppDatabase.createDatabase(appCtx)
+}
 
 @Database(
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
@@ -19,7 +23,7 @@ import java.util.*
         RssSource::class, Bookmark::class, RssArticle::class, RssReadRecord::class,
         RssStar::class, TxtTocRule::class, ReadRecord::class, HttpTTS::class, Cache::class,
         RuleSub::class],
-    version = 26,
+    version = 29,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -53,7 +57,8 @@ abstract class AppDatabase : RoomDatabase() {
                     migration_10_11, migration_11_12, migration_12_13, migration_13_14,
                     migration_14_15, migration_15_17, migration_17_18, migration_18_19,
                     migration_19_20, migration_20_21, migration_21_22, migration_22_23,
-                    migration_23_24, migration_24_25, migration_25_26
+                    migration_23_24, migration_24_25, migration_25_26, migration_26_27,
+                    migration_27_28, migration_28_29
                 )
                 .allowMainThreadQueries()
                 .addCallback(dbCallback)
@@ -150,7 +155,7 @@ abstract class AppDatabase : RoomDatabase() {
                     """CREATE TABLE IF NOT EXISTS `readRecordNew` (`androidId` TEXT NOT NULL, `bookName` TEXT NOT NULL, `readTime` INTEGER NOT NULL, 
                     PRIMARY KEY(`androidId`, `bookName`))"""
                 )
-                database.execSQL("INSERT INTO readRecordNew(androidId, bookName, readTime) select '${App.androidId}' as androidId, bookName, readTime from readRecord")
+                database.execSQL("INSERT INTO readRecordNew(androidId, bookName, readTime) select '${androidId}' as androidId, bookName, readTime from readRecord")
                 database.execSQL("DROP TABLE readRecord")
                 database.execSQL("ALTER TABLE readRecordNew RENAME TO readRecord")
             }
@@ -207,11 +212,9 @@ abstract class AppDatabase : RoomDatabase() {
         private val migration_24_25 = object : Migration(24, 25) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
-                    """
-                    CREATE TABLE IF NOT EXISTS `sourceSubs` 
+                    """CREATE TABLE IF NOT EXISTS `sourceSubs` 
                     (`id` INTEGER NOT NULL, `name` TEXT NOT NULL, `url` TEXT NOT NULL, `type` INTEGER NOT NULL, `customOrder` INTEGER NOT NULL, 
-                    PRIMARY KEY(`id`))
-                """
+                    PRIMARY KEY(`id`))"""
                 )
             }
         }
@@ -219,17 +222,43 @@ abstract class AppDatabase : RoomDatabase() {
         private val migration_25_26 = object : Migration(25, 26) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
-                    """
-                    CREATE TABLE IF NOT EXISTS `ruleSubs` (`id` INTEGER NOT NULL, `name` TEXT NOT NULL, `url` TEXT NOT NULL, `type` INTEGER NOT NULL, 
-                    `customOrder` INTEGER NOT NULL, `autoUpdate` INTEGER NOT NULL, `update` INTEGER NOT NULL, PRIMARY KEY(`id`))
-                """
+                    """CREATE TABLE IF NOT EXISTS `ruleSubs` (`id` INTEGER NOT NULL, `name` TEXT NOT NULL, `url` TEXT NOT NULL, `type` INTEGER NOT NULL, 
+                    `customOrder` INTEGER NOT NULL, `autoUpdate` INTEGER NOT NULL, `update` INTEGER NOT NULL, PRIMARY KEY(`id`))"""
+                )
+                database.execSQL(" insert into `ruleSubs` select *, 0, 0 from `sourceSubs` ")
+                database.execSQL("DROP TABLE `sourceSubs`")
+            }
+        }
+
+        private val migration_26_27 = object : Migration(26, 27) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(" ALTER TABLE rssSources ADD singleUrl INTEGER NOT NULL DEFAULT 0 ")
+                database.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `bookmarks1` (`time` INTEGER NOT NULL, `bookUrl` TEXT NOT NULL, `bookName` TEXT NOT NULL, 
+                        `bookAuthor` TEXT NOT NULL, `chapterIndex` INTEGER NOT NULL, `chapterPos` INTEGER NOT NULL, `chapterName` TEXT NOT NULL, 
+                        `bookText` TEXT NOT NULL, `content` TEXT NOT NULL, PRIMARY KEY(`time`))"""
                 )
                 database.execSQL(
-                    """
-                    insert into `ruleSubs` select *, 0, 0 from `sourceSubs`
-                """
+                    """insert into `bookmarks1` 
+                        select `time`, `bookUrl`, `bookName`, `bookAuthor`, `chapterIndex`, `pageIndex`, `chapterName`, '', `content` 
+                        from bookmarks"""
                 )
-                database.execSQL("DROP TABLE `sourceSubs`")
+                database.execSQL(" DROP TABLE `bookmarks` ")
+                database.execSQL(" ALTER TABLE bookmarks1 RENAME TO bookmarks ")
+                database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_bookmarks_time` ON `bookmarks` (`time`)")
+            }
+        }
+
+        private val migration_27_28 = object : Migration(27, 28) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE rssArticles ADD variable TEXT")
+                database.execSQL("ALTER TABLE rssStars ADD variable TEXT")
+            }
+        }
+
+        private val migration_28_29 = object : Migration(28, 29) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE rssSources ADD sourceComment TEXT")
             }
         }
     }

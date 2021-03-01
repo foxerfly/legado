@@ -6,13 +6,16 @@ import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.*
+import androidx.activity.viewModels
 import androidx.core.view.isVisible
-import io.legado.app.App
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.PreferKey
+import io.legado.app.constant.charsets
+import io.legado.app.data.appDb
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.databinding.ActivityBookReadBinding
+import io.legado.app.databinding.DialogBookmarkBinding
 import io.legado.app.databinding.DialogDownloadChoiceBinding
 import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.AppConfig
@@ -24,14 +27,12 @@ import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.lib.theme.backgroundColor
-import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.service.help.CacheBook
 import io.legado.app.service.help.ReadBook
 import io.legado.app.ui.book.read.config.BgTextConfigDialog
 import io.legado.app.ui.book.read.config.ClickActionConfigDialog
 import io.legado.app.ui.book.read.config.PaddingConfigDialog
 import io.legado.app.utils.getPrefString
-import io.legado.app.utils.getViewModel
 import io.legado.app.utils.requestInputMethod
 
 /**
@@ -41,7 +42,7 @@ abstract class ReadBookBaseActivity :
     VMBaseActivity<ActivityBookReadBinding, ReadBookViewModel>() {
 
     override val viewModel: ReadBookViewModel
-        get() = getViewModel(ReadBookViewModel::class.java)
+            by viewModels()
     var bottomDialog = 0
 
     override fun getViewBinding(): ActivityBookReadBinding {
@@ -78,7 +79,7 @@ abstract class ReadBookBaseActivity :
      */
     @SuppressLint("SourceLockedOrientationActivity")
     fun setOrientation() {
-        when (AppConfig.requestedDirection) {
+        when (AppConfig.screenOrientation) {
             "0" -> requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             "1" -> requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             "2" -> requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
@@ -144,10 +145,12 @@ abstract class ReadBookBaseActivity :
 
     override fun upNavigationBarColor() {
         when {
-            binding.readMenu.isVisible -> ATH.setNavigationBarColorAuto(this)
-            bottomDialog > 0 -> ATH.setNavigationBarColorAuto(this, bottomBackground)
-            else -> {
+            binding.readMenu.isVisible -> super.upNavigationBarColor()
+            bottomDialog > 0 -> super.upNavigationBarColor()
+            else -> if (AppConfig.immNavigationBar) {
                 ATH.setNavigationBarColorAuto(this, Color.TRANSPARENT)
+            } else {
+                ATH.setNavigationBarColorAuto(this, Color.parseColor("#20000000"))
             }
         }
     }
@@ -184,7 +187,7 @@ abstract class ReadBookBaseActivity :
                     editStart.setText((book.durChapterIndex + 1).toString())
                     editEnd.setText(book.totalChapterNum.toString())
                 }
-                customView = alertBinding.root
+                customView { alertBinding.root }
                 yesButton {
                     alertBinding.run {
                         val start = editStart.text?.toString()?.toInt() ?: 0
@@ -198,27 +201,20 @@ abstract class ReadBookBaseActivity :
     }
 
     @SuppressLint("InflateParams")
-    fun showBookMark() {
-        val book = ReadBook.book ?: return
-        val textChapter = ReadBook.curTextChapter ?: return
+    fun showBookMark(bookmark: Bookmark) {
         alert(title = getString(R.string.bookmark_add)) {
-            val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
-                editView.setHint(R.string.note_content)
+            setMessage(bookmark.chapterName)
+            val alertBinding = DialogBookmarkBinding.inflate(layoutInflater).apply {
+                editBookText.setText(bookmark.bookText)
+                editView.setText(bookmark.content)
             }
-            message = book.name + " • " + textChapter.title
-            customView = alertBinding.root
+            customView { alertBinding.root }
             yesButton {
-                alertBinding.editView.text?.toString()?.let { editContent ->
+                alertBinding.apply {
                     Coroutine.async {
-                        val bookmark = Bookmark(
-                            bookUrl = book.bookUrl,
-                            bookName = book.name,
-                            chapterIndex = ReadBook.durChapterIndex,
-                            pageIndex = ReadBook.durChapterPos,
-                            chapterName = textChapter.title,
-                            content = editContent
-                        )
-                        App.db.bookmarkDao.insert(bookmark)
+                        bookmark.bookText = editBookText.text.toString()
+                        bookmark.content = editView.text.toString()
+                        appDb.bookmarkDao.insert(bookmark)
                     }
                 }
             }
@@ -226,16 +222,13 @@ abstract class ReadBookBaseActivity :
         }.show().requestInputMethod()
     }
 
-    @SuppressLint("InflateParams")
     fun showCharsetConfig() {
-        val charsets =
-            arrayListOf("UTF-8", "GB2312", "GBK", "Unicode", "UTF-16", "UTF-16LE", "ASCII")
         alert(R.string.set_charset) {
             val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
                 editView.setFilterValues(charsets)
                 editView.setText(ReadBook.book?.charset)
             }
-            customView = alertBinding.root
+            customView { alertBinding.root }
             okButton {
                 alertBinding.editView.text?.toString()?.let {
                     ReadBook.setCharset(it)

@@ -6,15 +6,14 @@ import android.view.ViewGroup
 import androidx.appcompat.widget.PopupMenu
 import io.legado.app.R
 import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.base.adapter.SimpleRecyclerAdapter
+import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.data.entities.RssSource
 import io.legado.app.databinding.ItemRssBinding
 import io.legado.app.help.ImageLoader
-import org.jetbrains.anko.sdk27.listeners.onClick
-import org.jetbrains.anko.sdk27.listeners.onLongClick
+import splitties.views.onLongClick
 
 class RssAdapter(context: Context, val callBack: CallBack) :
-    SimpleRecyclerAdapter<RssSource, ItemRssBinding>(context) {
+    RecyclerAdapter<RssSource, ItemRssBinding>(context) {
 
     override fun getViewBinding(parent: ViewGroup): ItemRssBinding {
         return ItemRssBinding.inflate(inflater, parent, false)
@@ -38,7 +37,7 @@ class RssAdapter(context: Context, val callBack: CallBack) :
 
     override fun registerListener(holder: ItemViewHolder, binding: ItemRssBinding) {
         binding.apply {
-            root.onClick {
+            root.setOnClickListener {
                 getItemByLayoutPosition(holder.layoutPosition)?.let {
                     callBack.openRss(it)
                 }
@@ -47,7 +46,6 @@ class RssAdapter(context: Context, val callBack: CallBack) :
                 getItemByLayoutPosition(holder.layoutPosition)?.let {
                     showMenu(ivIcon, it)
                 }
-                true
             }
         }
     }

@@ -4,16 +4,16 @@ import android.content.Context
 import android.view.ViewGroup
 import io.legado.app.R
 import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.base.adapter.SimpleRecyclerAdapter
+import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.databinding.ItemSearchBinding
 import io.legado.app.utils.gone
 import io.legado.app.utils.visible
-import org.jetbrains.anko.sdk27.listeners.onClick
+
 
 class ExploreShowAdapter(context: Context, val callBack: CallBack) :
-    SimpleRecyclerAdapter<SearchBook, ItemSearchBinding>(context) {
+    RecyclerAdapter<SearchBook, ItemSearchBinding>(context) {
 
     override fun getViewBinding(parent: ViewGroup): ItemSearchBinding {
         return ItemSearchBinding.inflate(inflater, parent, false)
@@ -51,7 +51,7 @@ class ExploreShowAdapter(context: Context, val callBack: CallBack) :
     }
 
     override fun registerListener(holder: ItemViewHolder, binding: ItemSearchBinding) {
-        holder.itemView.onClick {
+        holder.itemView.setOnClickListener {
             getItem(holder.layoutPosition)?.let {
                 callBack.showBookInfo(it.toBook())
             }

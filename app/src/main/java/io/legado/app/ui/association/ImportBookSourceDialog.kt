@@ -9,23 +9,28 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.widget.Toolbar
+import androidx.fragment.app.activityViewModels
 import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.base.adapter.SimpleRecyclerAdapter
+import io.legado.app.base.adapter.RecyclerAdapter
+import io.legado.app.constant.AppPattern
 import io.legado.app.constant.PreferKey
+import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
 import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.databinding.DialogRecyclerViewBinding
 import io.legado.app.databinding.ItemSourceImportBinding
 import io.legado.app.help.AppConfig
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.utils.getViewModelOfActivity
+import io.legado.app.ui.widget.dialog.WaitDialog
+import io.legado.app.utils.dp
 import io.legado.app.utils.putPrefBoolean
+import io.legado.app.utils.splitNotBlank
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.visible
-import org.jetbrains.anko.sdk27.listeners.onClick
+
 
 /**
  * 导入书源弹出窗口
@@ -34,8 +39,7 @@ class ImportBookSourceDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickList
 
     private val binding by viewBinding(DialogRecyclerViewBinding::bind)
 
-    val viewModel: ImportBookSourceViewModel
-        get() = getViewModelOfActivity(ImportBookSourceViewModel::class.java)
+    val viewModel: ImportBookSourceViewModel by activityViewModels()
     lateinit var adapter: SourcesAdapter
 
     override fun onStart() {
@@ -62,14 +66,45 @@ class ImportBookSourceDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickList
         binding.recyclerView.adapter = adapter
         adapter.setItems(viewModel.allSources)
         binding.tvCancel.visible()
-        binding.tvCancel.onClick {
-            dismiss()
+        binding.tvCancel.setOnClickListener {
+            dismissAllowingStateLoss()
         }
         binding.tvOk.visible()
-        binding.tvOk.onClick {
+        binding.tvOk.setOnClickListener {
+            val waitDialog = WaitDialog(requireContext())
+            waitDialog.show()
             viewModel.importSelect {
-                dismiss()
+                waitDialog.dismiss()
+                dismissAllowingStateLoss()
             }
+        }
+        upSelectText()
+        binding.tvFooterLeft.visible()
+        binding.tvFooterLeft.setOnClickListener {
+            val selectAll = viewModel.isSelectAll()
+            viewModel.selectStatus.forEachIndexed { index, b ->
+                if (b != !selectAll) {
+                    viewModel.selectStatus[index] = !selectAll
+                }
+            }
+            adapter.notifyDataSetChanged()
+            upSelectText()
+        }
+    }
+
+    private fun upSelectText() {
+        if (viewModel.isSelectAll()) {
+            binding.tvFooterLeft.text = getString(
+                R.string.select_cancel_count,
+                viewModel.selectCount(),
+                viewModel.allSources.size
+            )
+        } else {
+            binding.tvFooterLeft.text = getString(
+                R.string.select_all_count,
+                viewModel.selectCount(),
+                viewModel.allSources.size
+            )
         }
     }
 
@@ -85,8 +120,17 @@ class ImportBookSourceDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickList
         when (item.itemId) {
             R.id.menu_new_group -> {
                 alert(R.string.diy_edit_source_group) {
-                    val alertBinding = DialogEditTextBinding.inflate(layoutInflater)
-                    customView = alertBinding.root
+                    val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
+                        val groups = linkedSetOf<String>()
+                        appDb.bookSourceDao.allGroup.forEach { group ->
+                            groups.addAll(group.splitNotBlank(AppPattern.splitGroupRegex))
+                        }
+                        editView.setFilterValues(groups.toList())
+                        editView.dropDownHeight = 180.dp
+                    }
+                    customView {
+                        alertBinding.root
+                    }
                     okButton {
                         alertBinding.editView.text?.toString()?.let { group ->
                             viewModel.groupName = group
@@ -95,22 +139,6 @@ class ImportBookSourceDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickList
                     }
                     noButton()
                 }.show()
-            }
-            R.id.menu_select_all -> {
-                viewModel.selectStatus.forEachIndexed { index, b ->
-                    if (!b) {
-                        viewModel.selectStatus[index] = true
-                    }
-                }
-                adapter.notifyDataSetChanged()
-            }
-            R.id.menu_un_select_all -> {
-                viewModel.selectStatus.forEachIndexed { index, b ->
-                    if (b) {
-                        viewModel.selectStatus[index] = false
-                    }
-                }
-                adapter.notifyDataSetChanged()
             }
             R.id.menu_Keep_original_name -> {
                 item.isChecked = !item.isChecked
@@ -126,7 +154,7 @@ class ImportBookSourceDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickList
     }
 
     inner class SourcesAdapter(context: Context) :
-        SimpleRecyclerAdapter<BookSource, ItemSourceImportBinding>(context) {
+        RecyclerAdapter<BookSource, ItemSourceImportBinding>(context) {
 
         override fun getViewBinding(parent: ViewGroup): ItemSourceImportBinding {
             return ItemSourceImportBinding.inflate(inflater, parent, false)
@@ -141,12 +169,12 @@ class ImportBookSourceDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickList
             binding.apply {
                 cbSourceName.isChecked = viewModel.selectStatus[holder.layoutPosition]
                 cbSourceName.text = item.bookSourceName
-                tvSourceState.text =
-                    if (viewModel.checkSources[holder.layoutPosition] != null) {
-                        "已存在"
-                    } else {
-                        "新书源"
-                    }
+                val localSource = viewModel.checkSources[holder.layoutPosition]
+                tvSourceState.text = when {
+                    localSource == null -> "新书源"
+                    item.lastUpdateTime > localSource.lastUpdateTime -> "更新"
+                    else -> "已存在"
+                }
             }
 
         }
@@ -156,6 +184,7 @@ class ImportBookSourceDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickList
                 cbSourceName.setOnCheckedChangeListener { buttonView, isChecked ->
                     if (buttonView.isPressed) {
                         viewModel.selectStatus[holder.layoutPosition] = isChecked
+                        upSelectText()
                     }
                 }
             }

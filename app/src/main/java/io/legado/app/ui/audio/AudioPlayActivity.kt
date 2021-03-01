@@ -3,11 +3,13 @@ package io.legado.app.ui.audio
 import android.app.Activity
 import android.content.Intent
 import android.graphics.drawable.Drawable
+import android.icu.text.SimpleDateFormat
 import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.SeekBar
+import androidx.activity.viewModels
 import com.bumptech.glide.RequestBuilder
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import com.bumptech.glide.request.RequestOptions.bitmapTransform
@@ -27,21 +29,28 @@ import io.legado.app.ui.book.toc.ChapterListActivity
 import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
 import io.legado.app.utils.*
-import org.apache.commons.lang3.time.DateFormatUtils
-import org.jetbrains.anko.sdk27.listeners.onClick
-import org.jetbrains.anko.sdk27.listeners.onLongClick
-import org.jetbrains.anko.startActivityForResult
+import splitties.views.onLongClick
+import java.util.*
 
-
+/**
+ * 音频播放
+ */
 class AudioPlayActivity :
     VMBaseActivity<ActivityAudioPlayBinding, AudioPlayViewModel>(toolBarTheme = Theme.Dark),
     ChangeSourceDialog.CallBack {
 
     override val viewModel: AudioPlayViewModel
-        get() = getViewModel(AudioPlayViewModel::class.java)
+            by viewModels()
 
     private var requestCodeChapter = 8461
     private var adjustProgress = false
+    private val progressTimeFormat by lazy {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            SimpleDateFormat("mm:ss", Locale.getDefault())
+        } else {
+            java.text.SimpleDateFormat("mm:ss", Locale.getDefault())
+        }
+    }
 
     override fun getViewBinding(): ActivityAudioPlayBinding {
         return ActivityAudioPlayBinding.inflate(layoutInflater)
@@ -70,22 +79,21 @@ class AudioPlayActivity :
     }
 
     private fun initView() {
-        binding.fabPlayStop.onClick {
+        binding.fabPlayStop.setOnClickListener {
             playButton()
         }
         binding.fabPlayStop.onLongClick {
-            AudioPlay.stop(this)
-            true
+            AudioPlay.stop(this@AudioPlayActivity)
         }
-        binding.ivSkipNext.onClick {
-            AudioPlay.next(this)
+        binding.ivSkipNext.setOnClickListener {
+            AudioPlay.next(this@AudioPlayActivity)
         }
-        binding.ivSkipPrevious.onClick {
-            AudioPlay.prev(this)
+        binding.ivSkipPrevious.setOnClickListener {
+            AudioPlay.prev(this@AudioPlayActivity)
         }
         binding.playerProgress.setOnSeekBarChangeListener(object : SeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
-                binding.tvDurTime.text = DateFormatUtils.format(progress.toLong(), "mm:ss")
+                binding.tvDurTime.text = progressTimeFormat.format(progress.toLong())
             }
 
             override fun onStartTrackingTouch(seekBar: SeekBar) {
@@ -97,26 +105,25 @@ class AudioPlayActivity :
                 AudioPlay.adjustProgress(this@AudioPlayActivity, seekBar.progress)
             }
         })
-        binding.ivChapter.onClick {
+        binding.ivChapter.setOnClickListener {
             AudioPlay.book?.let {
-                startActivityForResult<ChapterListActivity>(
-                    requestCodeChapter,
-                    Pair("bookUrl", it.bookUrl)
-                )
+                startActivityForResult<ChapterListActivity>(requestCodeChapter) {
+                    putExtra("bookUrl", it.bookUrl)
+                }
             }
         }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             binding.ivFastRewind.invisible()
             binding.ivFastForward.invisible()
         }
-        binding.ivFastForward.onClick {
-            AudioPlay.adjustSpeed(this, 0.1f)
+        binding.ivFastForward.setOnClickListener {
+            AudioPlay.adjustSpeed(this@AudioPlayActivity, 0.1f)
         }
-        binding.ivFastRewind.onClick {
-            AudioPlay.adjustSpeed(this, -0.1f)
+        binding.ivFastRewind.setOnClickListener {
+            AudioPlay.adjustSpeed(this@AudioPlayActivity, -0.1f)
         }
-        binding.ivTimer.onClick {
-            AudioPlay.addTimer(this)
+        binding.ivTimer.setOnClickListener {
+            AudioPlay.addTimer(this@AudioPlayActivity)
         }
     }
 
@@ -156,7 +163,7 @@ class AudioPlayActivity :
         AudioPlay.book?.let {
             if (!AudioPlay.inBookshelf) {
                 alert(title = getString(R.string.add_to_shelf)) {
-                    message = getString(R.string.check_add_bookshelf, it.name)
+                    setMessage(getString(R.string.check_add_bookshelf, it.name))
                     okButton {
                         AudioPlay.inBookshelf = true
                         setResult(Activity.RESULT_OK)
@@ -208,12 +215,12 @@ class AudioPlayActivity :
         }
         observeEventSticky<Int>(EventBus.AUDIO_SIZE) {
             binding.playerProgress.max = it
-            binding.tvAllTime.text = DateFormatUtils.format(it.toLong(), "mm:ss")
+            binding.tvAllTime.text = progressTimeFormat.format(it.toLong())
         }
         observeEventSticky<Int>(EventBus.AUDIO_PROGRESS) {
             AudioPlay.durChapterPos = it
             if (!adjustProgress) binding.playerProgress.progress = it
-            binding.tvDurTime.text = DateFormatUtils.format(it.toLong(), "mm:ss")
+            binding.tvDurTime.text = progressTimeFormat.format(it.toLong())
         }
         observeEventSticky<Float>(EventBus.AUDIO_SPEED) {
             binding.tvSpeed.text = String.format("%.1fX", it)

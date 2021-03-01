@@ -9,19 +9,15 @@ import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import io.legado.app.App
 import io.legado.app.constant.AppConst
 import org.apache.commons.text.StringEscapeUtils
+import splitties.init.appCtx
 import java.lang.ref.WeakReference
 
 
 class AjaxWebView {
     var callback: Callback? = null
-    private var mHandler: AjaxHandler
-
-    init {
-        mHandler = AjaxHandler(this)
-    }
+    private var mHandler: AjaxHandler = AjaxHandler(this)
 
     class AjaxHandler(private val ajaxWebView: AjaxWebView) : Handler(Looper.getMainLooper()) {
 
@@ -39,7 +35,7 @@ class AjaxWebView {
                     mWebView = createAjaxWebView(params, this)
                 }
                 MSG_SUCCESS -> {
-                    ajaxWebView.callback?.onResult(msg.obj as Res)
+                    ajaxWebView.callback?.onResult(msg.obj as StrResponse)
                     destroyWebView()
                 }
                 MSG_ERROR -> {
@@ -51,7 +47,7 @@ class AjaxWebView {
 
         @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
         fun createAjaxWebView(params: AjaxParams, handler: Handler): WebView {
-            val webView = WebView(App.INSTANCE)
+            val webView = WebView(appCtx)
             val settings = webView.settings
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
@@ -160,13 +156,17 @@ class AjaxWebView {
                 if (it.isNotEmpty() && it != "null") {
                     val content = StringEscapeUtils.unescapeJson(it)
                         .replace("^\"|\"$".toRegex(), "")
-                    handler.obtainMessage(MSG_SUCCESS, Res(url, content))
-                        .sendToTarget()
+                    try {
+                        val response = StrResponse(url, content)
+                        handler.obtainMessage(MSG_SUCCESS, response).sendToTarget()
+                    } catch (e: Exception) {
+                        handler.obtainMessage(MSG_ERROR, e).sendToTarget()
+                    }
                     handler.removeCallbacks(this)
                     return@evaluateJavascript
                 }
                 if (retry > 30) {
-                    handler.obtainMessage(MSG_ERROR, Exception("time out"))
+                    handler.obtainMessage(MSG_ERROR, Exception("js执行超时"))
                         .sendToTarget()
                     handler.removeCallbacks(this)
                     return@evaluateJavascript
@@ -186,8 +186,12 @@ class AjaxWebView {
         override fun onLoadResource(view: WebView, url: String) {
             params.sourceRegex?.let {
                 if (url.matches(it.toRegex())) {
-                    handler.obtainMessage(MSG_SUCCESS, Res(view.url ?: params.url, url))
-                        .sendToTarget()
+                    try {
+                        val response = StrResponse(params.url, url)
+                        handler.obtainMessage(MSG_SUCCESS, response).sendToTarget()
+                    } catch (e: Exception) {
+                        handler.obtainMessage(MSG_ERROR, e).sendToTarget()
+                    }
                 }
             }
         }
@@ -226,7 +230,7 @@ class AjaxWebView {
     }
 
     abstract class Callback {
-        abstract fun onResult(response: Res)
+        abstract fun onResult(response: StrResponse)
         abstract fun onError(error: Throwable)
     }
 }

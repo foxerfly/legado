@@ -215,7 +215,7 @@
     <string name="select_action">Selection action</string>
     <string name="select_all">Select all</string>
     <string name="select_all_count">Select all(%1$d/%2$d)</string>
-    <string name="select_cancel_count">Cancel(%1$d/%2$d)</string>
+    <string name="select_cancel_count">Cancel select all(%1$d/%2$d)</string>
     <string name="dark_theme">Dark mode</string>
     <string name="welcome">Welcome page</string>
     <string name="download_start">Download start</string>
@@ -365,8 +365,8 @@
     <string name="finish_book">Finished books</string>
     <string name="local_book">Local books</string>
     <string name="status_bar_immersion">The status bar color becomes transparent</string>
-    <string name="navigation_bar_color_change">Discolored navigation bar</string>
-    <string name="navigation_bar_color_change_s">The navigation bar changes color following the dark mode</string>
+    <string name="imm_navigation_bar">immersion navigation bar</string>
+    <string name="imm_navigation_bar_s">The navigation bar becomes transparent</string>
     <string name="add_to_shelf">Add to Bookshelf</string>
     <string name="continue_read">Continue reading</string>
     <string name="cover_path">Cover path</string>
@@ -485,6 +485,7 @@
     <string name="no">No</string>
     <string name="sure">OK</string>
     <string name="sure_del">Are you sure to delete it?</string>
+    <string name="sure_del_any">Are you sure to delete %s?</string>
     <string name="sure_del_all_book">Are you sure to delete all books？</string>
     <string name="sure_del_download_book">Do you want to delete the downloaded book chapters at the same time?</string>
     <string name="qr_per">Scan QR code requires Camera permissions</string>
@@ -795,5 +796,21 @@
     <string name="header_footer">footer <![CDATA[&]]> header</string>
     <string name="rule_subscription">规则订阅</string>
     <string name="rule_sub_empty_msg">添加大佬们提供的规则导入地址\n添加后点击可导入规则</string>
+    <string name="get_book_progress">拉取云端进度</string>
+    <string name="current_progress_exceeds_cloud">当前进度超过云端进度,是否同步?</string>
+    <string name="sync_book_progress_t">同步阅读进度</string>
+    <string name="sync_book_progress_s">进入退出阅读界面时同步阅读进度</string>
+    <string name="create_bookmark_error">创建书签失败</string>
+    <string name="single_url">单URL</string>
+    <string name="export_bookshelf">导出书单</string>
+    <string name="import_bookshelf">导入书单</string>
+    <string name="pre_download">预下载</string>
+    <string name="pre_download_s">预先下载10章正文</string>
+    <string name="sort_enable">启用排序</string>
+    <string name="background_image">背景图片</string>
+    <string name="export_folder">导出文件夹</string>
+    <string name="export_charset">导出编码</string>
+    <string name="export_to_web_dav">导出到WebDav</string>
+    <string name="reverse_content">反转内容</string>
 
 </resources>

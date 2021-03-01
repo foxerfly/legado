@@ -6,19 +6,19 @@ import android.os.Build
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
-import io.legado.app.App
 import io.legado.app.constant.AppPattern
 import io.legado.app.constant.EventBus
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.AppConfig
-import io.legado.app.help.BookHelp
 import io.legado.app.help.ReadBookConfig
+import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.read.page.entities.TextChar
 import io.legado.app.ui.book.read.page.entities.TextLine
 import io.legado.app.ui.book.read.page.entities.TextPage
 import io.legado.app.utils.*
+import splitties.init.appCtx
 import java.util.*
 
 
@@ -61,7 +61,7 @@ object ChapterProvider {
     private var titleBottomSpacing = 0
 
     @JvmStatic
-    var typeface: Typeface = Typeface.SANS_SERIF
+    var typeface: Typeface = Typeface.DEFAULT
 
     @JvmStatic
     lateinit var titlePaint: TextPaint
@@ -86,27 +86,21 @@ object ChapterProvider {
         val textPages = arrayListOf<TextPage>()
         val stringBuilder = StringBuilder()
         var durY = 0f
-        var paint = Pair(titlePaint, contentPaint)
-        BookHelp.getFontPath(book, bookChapter)?.let {
-            val typeface = getTypeface(it)
-            paint = getPaint(typeface)
-        }
         textPages.add(TextPage())
         contents.forEachIndexed { index, text ->
             val matcher = AppPattern.imgPattern.matcher(text)
             if (matcher.find()) {
-                var src = matcher.group(1)
-                if (!book.isEpub()) {
-                    src = NetworkUtils.getAbsoluteURL(bookChapter.url, src)
-                }
-                src?.let {
-                    durY = setTypeImage(
-                        book, bookChapter, src, durY, textPages, imageStyle
-                    )
+                matcher.group(1)?.let {
+                    if (!book.isEpub()) {
+                        val src = NetworkUtils.getAbsoluteURL(bookChapter.url, it)
+                        durY = setTypeImage(
+                            book, bookChapter, src, durY, textPages, imageStyle
+                        )
+                    }
                 }
             } else {
                 val isTitle = index == 0
-                val textPaint = if (isTitle) paint.first else paint.second
+                val textPaint = if (isTitle) titlePaint else contentPaint
                 if (!(isTitle && ReadBookConfig.titleMode == 2)) {
                     durY = setTypeText(text, durY, textPages, stringBuilder, isTitle, textPaint)
                 }
@@ -125,8 +119,8 @@ object ChapterProvider {
 
         return TextChapter(
             bookChapter.index, bookChapter.title,
-            bookChapter.getAbsoluteURL().substringBefore(","),
-            textPages, chapterSize, paint.first, paint.second
+            bookChapter.getAbsoluteURL().split(AnalyzeUrl.splitUrlRegex)[0],
+            textPages, chapterSize
         )
     }
 
@@ -358,16 +352,16 @@ object ChapterProvider {
     }
 
     private fun getTypeface(fontPath: String): Typeface {
-        return try {
+        return kotlin.runCatching {
             when {
                 fontPath.isContentScheme() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> {
-                    val fd = App.INSTANCE.contentResolver
+                    val fd = appCtx.contentResolver
                         .openFileDescriptor(Uri.parse(fontPath), "r")!!
                         .fileDescriptor
                     Typeface.Builder(fd).build()
                 }
                 fontPath.isContentScheme() -> {
-                    Typeface.createFromFile(RealPathUtil.getPath(App.INSTANCE, Uri.parse(fontPath)))
+                    Typeface.createFromFile(RealPathUtil.getPath(appCtx, Uri.parse(fontPath)))
                 }
                 fontPath.isNotEmpty() -> Typeface.createFromFile(fontPath)
                 else -> when (AppConfig.systemTypefaces) {
@@ -376,7 +370,7 @@ object ChapterProvider {
                     else -> Typeface.SANS_SERIF
                 }
             }
-        } catch (e: Exception) {
+        }.getOrElse {
             ReadBookConfig.textFont = ""
             ReadBookConfig.save()
             Typeface.SANS_SERIF

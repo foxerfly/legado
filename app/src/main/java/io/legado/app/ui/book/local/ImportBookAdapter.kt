@@ -5,21 +5,24 @@ import android.net.Uri
 import android.view.ViewGroup
 import io.legado.app.R
 import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.base.adapter.SimpleRecyclerAdapter
+import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.constant.AppConst
 import io.legado.app.databinding.ItemImportBookBinding
 import io.legado.app.utils.*
-import org.jetbrains.anko.sdk27.listeners.onClick
 
 
 class ImportBookAdapter(context: Context, val callBack: CallBack) :
-    SimpleRecyclerAdapter<DocItem, ItemImportBookBinding>(context) {
+    RecyclerAdapter<DocItem, ItemImportBookBinding>(context) {
     var selectedUris = hashSetOf<String>()
     var checkableCount = 0
     private var bookFileNames = arrayListOf<String>()
 
     override fun getViewBinding(parent: ViewGroup): ItemImportBookBinding {
         return ItemImportBookBinding.inflate(inflater, parent, false)
+    }
+
+    override fun onCurrentListChanged() {
+        upCheckableCount()
     }
 
     override fun convert(
@@ -59,7 +62,7 @@ class ImportBookAdapter(context: Context, val callBack: CallBack) :
     }
 
     override fun registerListener(holder: ItemViewHolder, binding: ItemImportBookBinding) {
-        holder.itemView.onClick {
+        holder.itemView.setOnClickListener {
             getItem(holder.layoutPosition)?.let {
                 if (it.isDir) {
                     callBack.nextDoc(it.uri)
@@ -86,15 +89,10 @@ class ImportBookAdapter(context: Context, val callBack: CallBack) :
         upCheckableCount()
     }
 
-    fun setData(data: List<DocItem>) {
-        setItems(data)
-        upCheckableCount()
-    }
-
     private fun upCheckableCount() {
         checkableCount = 0
         getItems().forEach {
-            if (!it.isDir && !bookFileNames.contains(it.uri.toString())) {
+            if (!it.isDir && !bookFileNames.contains(it.name)) {
                 checkableCount++
             }
         }
@@ -104,7 +102,7 @@ class ImportBookAdapter(context: Context, val callBack: CallBack) :
     fun selectAll(selectAll: Boolean) {
         if (selectAll) {
             getItems().forEach {
-                if (!it.isDir && !bookFileNames.contains(it.uri.toString())) {
+                if (!it.isDir && !bookFileNames.contains(it.name)) {
                     selectedUris.add(it.uri.toString())
                 }
             }

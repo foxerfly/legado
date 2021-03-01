@@ -5,15 +5,16 @@ import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.MutableLiveData
 import com.jayway.jsonpath.JsonPath
-import io.legado.app.App
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
+import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssSource
 import io.legado.app.help.AppConfig
 import io.legado.app.help.SourceHelp
-import io.legado.app.help.http.HttpHelper
 import io.legado.app.help.storage.Restore
 import io.legado.app.utils.*
+import rxhttp.wrapper.param.RxHttp
+import rxhttp.wrapper.param.toText
 import java.io.File
 
 class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
@@ -25,6 +26,24 @@ class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
     val checkSources = arrayListOf<RssSource?>()
     val selectStatus = arrayListOf<Boolean>()
 
+    fun isSelectAll(): Boolean {
+        selectStatus.forEach {
+            if (!it) {
+                return false
+            }
+        }
+        return true
+    }
+
+    fun selectCount(): Int {
+        var count = 0
+        selectStatus.forEach {
+            if (it) {
+                count++
+            }
+        }
+        return count
+    }
 
     fun importSelect(finally: () -> Unit) {
         execute {
@@ -113,8 +132,8 @@ class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
         }
     }
 
-    private fun importSourceUrl(url: String) {
-        HttpHelper.simpleGet(url, "UTF-8")?.let { body ->
+    private suspend fun importSourceUrl(url: String) {
+        RxHttp.get(url).toText("utf-8").await().let { body ->
             val items: List<Map<String, Any>> = Restore.jsonPath.parse(body).read("$")
             for (item in items) {
                 val jsonItem = Restore.jsonPath.parse(item)
@@ -128,7 +147,7 @@ class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
     private fun comparisonSource() {
         execute {
             allSources.forEach {
-                val has = App.db.rssSourceDao.getByKey(it.sourceUrl)
+                val has = appDb.rssSourceDao.getByKey(it.sourceUrl)
                 checkSources.add(has)
                 selectStatus.add(has == null)
             }

@@ -1,8 +1,8 @@
 package io.legado.app.help
 
-import io.legado.app.App
 import io.legado.app.constant.AppPattern
 import io.legado.app.constant.EventBus
+import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.coroutine.Coroutine
@@ -10,8 +10,8 @@ import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.utils.*
 import kotlinx.coroutines.delay
-import net.ricecode.similarity.JaroWinklerStrategy
-import net.ricecode.similarity.StringSimilarityServiceImpl
+import org.apache.commons.text.similarity.JaccardSimilarity
+import splitties.init.appCtx
 import java.io.File
 import java.util.concurrent.CopyOnWriteArraySet
 import java.util.regex.Matcher
@@ -23,7 +23,7 @@ import kotlin.math.min
 object BookHelp {
     private const val cacheFolderName = "book_cache"
     private const val cacheImageFolderName = "images"
-    private val downloadDir: File = App.INSTANCE.externalFilesDir
+    private val downloadDir: File = appCtx.externalFilesDir
     private val downloadImages = CopyOnWriteArraySet<String>()
 
     fun clearCache() {
@@ -43,7 +43,7 @@ object BookHelp {
     fun clearRemovedCache() {
         Coroutine.async {
             val bookFolderNames = arrayListOf<String>()
-            App.db.bookDao.all.forEach {
+            appDb.bookDao.all.forEach {
                 bookFolderNames.add(it.getFolderName())
             }
             val file = FileUtils.getFile(downloadDir, cacheFolderName)
@@ -68,16 +68,16 @@ object BookHelp {
         content.split("\n").forEach {
             val matcher = AppPattern.imgPattern.matcher(it)
             if (matcher.find()) {
-                var src = matcher.group(1)
-                src = NetworkUtils.getAbsoluteURL(bookChapter.url, src)
-                src?.let {
-                    saveImage(book, src)
+                matcher.group(1)?.let { src ->
+                    val mSrc = NetworkUtils.getAbsoluteURL(bookChapter.url, src)
+                    saveImage(book, mSrc)
                 }
             }
         }
         postEvent(EventBus.SAVE_CONTENT, bookChapter)
     }
 
+    @Suppress("unused")
     fun saveFont(book: Book, bookChapter: BookChapter, font: ByteArray) {
         FileUtils.createFileIfNotExist(
             downloadDir,
@@ -112,7 +112,7 @@ object BookHelp {
         downloadImages.add(src)
         val analyzeUrl = AnalyzeUrl(src)
         try {
-            analyzeUrl.getResponseBytes(book.origin)?.let {
+            analyzeUrl.getByteArray(book.origin).let {
                 FileUtils.createFileIfNotExist(
                     downloadDir,
                     cacheFolderName,
@@ -191,6 +191,25 @@ object BookHelp {
         return null
     }
 
+    fun reverseContent(book: Book, bookChapter: BookChapter) {
+        if (!book.isLocalBook()) {
+            val file = FileUtils.getFile(
+                downloadDir,
+                cacheFolderName,
+                book.getFolderName(),
+                bookChapter.getFileName()
+            )
+            if (file.exists()) {
+                val text = file.readText()
+                val stringBuilder = StringBuilder()
+                text.toStringArray().forEach {
+                    stringBuilder.insert(0, it)
+                }
+                file.writeText(stringBuilder.toString())
+            }
+        }
+    }
+
     fun delContent(book: Book, bookChapter: BookChapter) {
         if (book.isLocalBook()) {
             return
@@ -214,6 +233,10 @@ object BookHelp {
         return author
             .replace(AppPattern.authorRegex, "")
             .trim { it <= ' ' }
+    }
+
+    private val jaccardSimilarity by lazy {
+        JaccardSimilarity()
     }
 
     /**
@@ -248,10 +271,9 @@ object BookHelp {
         var newIndex = 0
         var newNum = 0
         if (oldName.isNotEmpty()) {
-            val service = StringSimilarityServiceImpl(JaroWinklerStrategy())
             for (i in min..max) {
                 val newName = getPureChapterName(newChapterList[i].title)
-                val temp = service.score(oldName, newName)
+                val temp = jaccardSimilarity.apply(oldName, newName)
                 if (temp > nameSim) {
                     nameSim = temp
                     newIndex = i

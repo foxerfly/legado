@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 public class QueryTTF {
-    private class Header {
+    private static class Header {
         public int majorVersion;
         public int minorVersion;
         public int numOfTables;
@@ -21,21 +21,21 @@ public class QueryTTF {
         public int rangeShift;
     }
 
-    private class Directory {
+    private static class Directory {
         public String tag;          // table name
         public int checkSum;       // Check sum
         public int offset;         // Offset from beginning of file
         public int length;         // length of the table in bytes
     }
 
-    private class NameLayout {
+    private static class NameLayout {
         public int format;
         public int count;
         public int stringOffset;
         public List<NameRecord> records = new LinkedList<>();
     }
 
-    private class NameRecord {
+    private static class NameRecord {
         public int platformID;           // 平台标识符<0:Unicode, 1:Mac, 2:ISO, 3:Windows, 4:Custom>
         public int encodingID;           // 编码标识符
         public int languageID;           // 语言标识符
@@ -44,7 +44,7 @@ public class QueryTTF {
         public int offset;               // 名称字符串相对于stringOffset的字节偏移量
     }
 
-    private class HeadLayout {
+    private static class HeadLayout {
         public int majorVersion;
         public int minorVersion;
         public int fontRevision;
@@ -65,7 +65,7 @@ public class QueryTTF {
         public short glyphDataFormat;
     }
 
-    private class MaxpLayout {
+    private static class MaxpLayout {
         public int majorVersion;
         public int minorVersion;
         public int numGlyphs;                // 字体中的字形数量
@@ -91,20 +91,20 @@ public class QueryTTF {
         public Map<Integer, CmapFormat> tables = new HashMap<>();
     }
 
-    private class CmapRecord {
+    private static class CmapRecord {
         public int platformID;
         public int encodingID;
         public int offset;
     }
 
-    private class CmapFormat {
+    private static class CmapFormat {
         public int format;
         public int length;
         public int language;
         public byte[] glyphIdArray;
     }
 
-    private class CmapFormat4 extends CmapFormat {
+    private static class CmapFormat4 extends CmapFormat {
         public int segCountX2;
         public int searchRange;
         public int entrySelector;
@@ -117,13 +117,13 @@ public class QueryTTF {
         public int[] glyphIdArray;
     }
 
-    private class CmapFormat6 extends CmapFormat {
+    private static class CmapFormat6 extends CmapFormat {
         public int firstCode;
         public int entryCount;
         public int[] glyphIdArray;
     }
 
-    private class CmapFormat12 extends CmapFormat {
+    private static class CmapFormat12 extends CmapFormat {
         public int reserved;
         public int length;
         public int language;
@@ -131,7 +131,7 @@ public class QueryTTF {
         public List<Triple<Integer, Integer, Integer>> groups;
     }
 
-    private class GlyfLayout {
+    private static class GlyfLayout {
         public short numberOfContours;      // 非负值为简单字型,负值为符合字型
         public short xMin;
         public short yMin;
@@ -145,7 +145,7 @@ public class QueryTTF {
         public short[] yCoordinates;        // length = flags.length
     }
 
-    private class ByteArrayReader {
+    private static class ByteArrayReader {
         public int Index;
         public byte[] Buffer;
 
@@ -214,15 +214,15 @@ public class QueryTTF {
     }
 
     private final ByteArrayReader FontReader;
-    private final Header FileHeader = new Header();
+    private final Header fileHeader = new Header();
     private final List<Directory> Directorys = new LinkedList<>();
     private final NameLayout Name = new NameLayout();
-    private final HeadLayout Head = new HeadLayout();
-    private final MaxpLayout Maxp = new MaxpLayout();
-    private final List<Integer> Loca = new LinkedList<>();
+    private final HeadLayout head = new HeadLayout();
+    private final MaxpLayout maxp = new MaxpLayout();
+    private final List<Integer> loca = new LinkedList<>();
     private final CmapLayout Cmap = new CmapLayout();
-    private final List<GlyfLayout> Glyf = new LinkedList<>();
-    private final Pair<Integer, Integer>[] pps = new Pair[]{
+    private final List<GlyfLayout> glyf = new LinkedList<>();
+    private final Pair[] pps = new Pair[]{
             Pair.of(3, 10),
             Pair.of(0, 4),
             Pair.of(3, 1),
@@ -244,14 +244,14 @@ public class QueryTTF {
     public QueryTTF(byte[] buffer) {
         FontReader = new ByteArrayReader(buffer, 0);
         // 获取文件头
-        FileHeader.majorVersion = FontReader.ReadUInt16();
-        FileHeader.minorVersion = FontReader.ReadUInt16();
-        FileHeader.numOfTables = FontReader.ReadUInt16();
-        FileHeader.searchRange = FontReader.ReadUInt16();
-        FileHeader.entrySelector = FontReader.ReadUInt16();
-        FileHeader.rangeShift = FontReader.ReadUInt16();
+        fileHeader.majorVersion = FontReader.ReadUInt16();
+        fileHeader.minorVersion = FontReader.ReadUInt16();
+        fileHeader.numOfTables = FontReader.ReadUInt16();
+        fileHeader.searchRange = FontReader.ReadUInt16();
+        fileHeader.entrySelector = FontReader.ReadUInt16();
+        fileHeader.rangeShift = FontReader.ReadUInt16();
         // 获取目录
-        for (int i = 0; i < FileHeader.numOfTables; ++i) {
+        for (int i = 0; i < fileHeader.numOfTables; ++i) {
             Directory d = new Directory();
             d.tag = FontReader.ReadStrings(4, StandardCharsets.US_ASCII);
             d.checkSum = FontReader.ReadUInt32();
@@ -282,55 +282,55 @@ public class QueryTTF {
         for (Directory Temp : Directorys) {
             if (Temp.tag.equals("head")) {
                 FontReader.Index = Temp.offset;
-                Head.majorVersion = FontReader.ReadUInt16();
-                Head.minorVersion = FontReader.ReadUInt16();
-                Head.fontRevision = FontReader.ReadUInt32();
-                Head.checkSumAdjustment = FontReader.ReadUInt32();
-                Head.magicNumber = FontReader.ReadUInt32();
-                Head.flags = FontReader.ReadUInt16();
-                Head.unitsPerEm = FontReader.ReadUInt16();
-                Head.created = FontReader.ReadUInt64();
-                Head.modified = FontReader.ReadUInt64();
-                Head.xMin = FontReader.ReadInt16();
-                Head.yMin = FontReader.ReadInt16();
-                Head.xMax = FontReader.ReadInt16();
-                Head.yMax = FontReader.ReadInt16();
-                Head.macStyle = FontReader.ReadUInt16();
-                Head.lowestRecPPEM = FontReader.ReadUInt16();
-                Head.fontDirectionHint = FontReader.ReadInt16();
-                Head.indexToLocFormat = FontReader.ReadInt16();
-                Head.glyphDataFormat = FontReader.ReadInt16();
+                head.majorVersion = FontReader.ReadUInt16();
+                head.minorVersion = FontReader.ReadUInt16();
+                head.fontRevision = FontReader.ReadUInt32();
+                head.checkSumAdjustment = FontReader.ReadUInt32();
+                head.magicNumber = FontReader.ReadUInt32();
+                head.flags = FontReader.ReadUInt16();
+                head.unitsPerEm = FontReader.ReadUInt16();
+                head.created = FontReader.ReadUInt64();
+                head.modified = FontReader.ReadUInt64();
+                head.xMin = FontReader.ReadInt16();
+                head.yMin = FontReader.ReadInt16();
+                head.xMax = FontReader.ReadInt16();
+                head.yMax = FontReader.ReadInt16();
+                head.macStyle = FontReader.ReadUInt16();
+                head.lowestRecPPEM = FontReader.ReadUInt16();
+                head.fontDirectionHint = FontReader.ReadInt16();
+                head.indexToLocFormat = FontReader.ReadInt16();
+                head.glyphDataFormat = FontReader.ReadInt16();
             }
         }
         // 解析表 maxp (获取 maxp.numGlyphs)
         for (Directory Temp : Directorys) {
             if (Temp.tag.equals("maxp")) {
                 FontReader.Index = Temp.offset;
-                Maxp.majorVersion = FontReader.ReadUInt16();
-                Maxp.minorVersion = FontReader.ReadUInt16();
-                Maxp.numGlyphs = FontReader.ReadUInt16();
-                Maxp.maxPoints = FontReader.ReadUInt16();
-                Maxp.maxContours = FontReader.ReadUInt16();
-                Maxp.maxCompositePoints = FontReader.ReadUInt16();
-                Maxp.maxCompositeContours = FontReader.ReadUInt16();
-                Maxp.maxZones = FontReader.ReadUInt16();
-                Maxp.maxTwilightPoints = FontReader.ReadUInt16();
-                Maxp.maxStorage = FontReader.ReadUInt16();
-                Maxp.maxFunctionDefs = FontReader.ReadUInt16();
-                Maxp.maxInstructionDefs = FontReader.ReadUInt16();
-                Maxp.maxStackElements = FontReader.ReadUInt16();
-                Maxp.maxSizeOfInstructions = FontReader.ReadUInt16();
-                Maxp.maxComponentElements = FontReader.ReadUInt16();
-                Maxp.maxComponentDepth = FontReader.ReadUInt16();
+                maxp.majorVersion = FontReader.ReadUInt16();
+                maxp.minorVersion = FontReader.ReadUInt16();
+                maxp.numGlyphs = FontReader.ReadUInt16();
+                maxp.maxPoints = FontReader.ReadUInt16();
+                maxp.maxContours = FontReader.ReadUInt16();
+                maxp.maxCompositePoints = FontReader.ReadUInt16();
+                maxp.maxCompositeContours = FontReader.ReadUInt16();
+                maxp.maxZones = FontReader.ReadUInt16();
+                maxp.maxTwilightPoints = FontReader.ReadUInt16();
+                maxp.maxStorage = FontReader.ReadUInt16();
+                maxp.maxFunctionDefs = FontReader.ReadUInt16();
+                maxp.maxInstructionDefs = FontReader.ReadUInt16();
+                maxp.maxStackElements = FontReader.ReadUInt16();
+                maxp.maxSizeOfInstructions = FontReader.ReadUInt16();
+                maxp.maxComponentElements = FontReader.ReadUInt16();
+                maxp.maxComponentDepth = FontReader.ReadUInt16();
             }
         }
         // 解析表 loca (轮廓数据偏移地址表)
         for (Directory Temp : Directorys) {
             if (Temp.tag.equals("loca")) {
                 FontReader.Index = Temp.offset;
-                int offset = Head.indexToLocFormat == 0 ? 2 : 4;
+                int offset = head.indexToLocFormat == 0 ? 2 : 4;
                 for (long i = 0; i < Temp.length; i += offset) {
-                    Loca.add(offset == 2 ? FontReader.ReadUInt16() << 1 : FontReader.ReadUInt32());
+                    loca.add(offset == 2 ? FontReader.ReadUInt16() << 1 : FontReader.ReadUInt32());
                 }
             }
         }
@@ -408,8 +408,8 @@ public class QueryTTF {
         for (Directory Temp : Directorys) {
             if (Temp.tag.equals("glyf")) {
                 FontReader.Index = Temp.offset;
-                for (int i = 0; i < Maxp.numGlyphs; ++i) {
-                    FontReader.Index = Temp.offset + Loca.get(i);
+                for (int i = 0; i < maxp.numGlyphs; ++i) {
+                    FontReader.Index = Temp.offset + loca.get(i);
 
                     short numberOfContours = FontReader.ReadInt16();
                     if (numberOfContours > 0) {
@@ -459,7 +459,7 @@ public class QueryTTF {
 //                            yCoordinates[n] += yCoordinates[n - 1];
 //                        }
 
-                        Glyf.add(g);
+                        glyf.add(g);
                     } else {
                         // 复合字体暂未使用
                     }
@@ -470,14 +470,14 @@ public class QueryTTF {
         // 建立Unicode&Glyph双向表
         for (int key = 0; key < 130000; ++key) {
             if (key == 0xFF) key = 0x3400;
-            int gid = GetGlyfIndex(key);
+            int gid = getGlyfIndex(key);
             if (gid == 0) continue;
             StringBuilder sb = new StringBuilder();
             // 字型数据转String，方便存HashMap
-            for (short b : Glyf.get(gid).xCoordinates) sb.append(b);
-            for (short b : Glyf.get(gid).yCoordinates) sb.append(b);
+            for (short b : glyf.get(gid).xCoordinates) sb.append(b);
+            for (short b : glyf.get(gid).yCoordinates) sb.append(b);
             String val = sb.toString();
-            if(LimitMix == 0) LimitMix = key;
+            if (LimitMix == 0) LimitMix = key;
             LimitMax = key;
             CodeToGlyph.put(key, val);
             if (GlyphToCode.containsKey(val)) continue;
@@ -491,7 +491,7 @@ public class QueryTTF {
      * @param nameId 传入十进制字体信息索引
      * @return 返回查询结果字符串
      */
-    public String GetNameById(int nameId) {
+    public String getNameById(int nameId) {
         for (Directory Temp : Directorys) {
             if (!Temp.tag.equals("name")) continue;
             FontReader.Index = Temp.offset;
@@ -511,10 +511,10 @@ public class QueryTTF {
      * @param code 传入Unicode十进制值
      * @return 返回十进制轮廓索引
      */
-    private int GetGlyfIndex(int code) {
+    private int getGlyfIndex(int code) {
         if (code == 0) return 0;
         int fmtKey = 0;
-        for (Pair<Integer, Integer> item : pps) {
+        for (@SuppressWarnings("unchecked") Pair<Integer, Integer> item : pps) {
             for (CmapRecord record : Cmap.records) {
                 if ((item.getLeft() == record.platformID) && (item.getRight() == record.encodingID)) {
                     fmtKey = record.offset;
@@ -570,10 +570,11 @@ public class QueryTTF {
 
     /**
      * 判断Unicode值是否在字体范围内
+     *
      * @param code 传入Unicode十进制值
      * @return 返回bool查询结果
      */
-    public boolean InLimit(char code){
+    public boolean inLimit(char code) {
         return (LimitMix <= code) && (code < LimitMax);
     }
 
@@ -583,7 +584,7 @@ public class QueryTTF {
      * @param key 传入Unicode十进制值
      * @return 返回轮廓数组的String值
      */
-    public String GetGlyfByCode(int key) {
+    public String getGlyfByCode(int key) {
         return CodeToGlyph.getOrDefault(key, "");
     }
 
@@ -593,7 +594,7 @@ public class QueryTTF {
      * @param val 传入轮廓数组的String值
      * @return 返回Unicode十进制值
      */
-    public int GetCodeByGlyf(String val) {
+    public int getCodeByGlyf(String val) {
         return GlyphToCode.getOrDefault(val, 0);
     }
 }

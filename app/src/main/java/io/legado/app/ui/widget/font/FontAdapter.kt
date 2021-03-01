@@ -5,18 +5,14 @@ import android.graphics.Typeface
 import android.os.Build
 import android.view.ViewGroup
 import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.base.adapter.SimpleRecyclerAdapter
+import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.databinding.ItemFontBinding
-import io.legado.app.utils.DocItem
-import io.legado.app.utils.RealPathUtil
-import io.legado.app.utils.invisible
-import io.legado.app.utils.visible
-import org.jetbrains.anko.sdk27.listeners.onClick
-import org.jetbrains.anko.toast
+import io.legado.app.utils.*
 import java.io.File
+import java.net.URLDecoder
 
 class FontAdapter(context: Context, val callBack: CallBack) :
-    SimpleRecyclerAdapter<DocItem, ItemFontBinding>(context) {
+    RecyclerAdapter<DocItem, ItemFontBinding>(context) {
 
     override fun getViewBinding(parent: ViewGroup): ItemFontBinding {
         return ItemFontBinding.inflate(inflater, parent, false)
@@ -29,7 +25,7 @@ class FontAdapter(context: Context, val callBack: CallBack) :
         payloads: MutableList<Any>
     ) {
         with(binding) {
-            try {
+            kotlin.runCatching {
                 val typeface: Typeface? = if (item.isContentPath) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         context.contentResolver
@@ -44,13 +40,15 @@ class FontAdapter(context: Context, val callBack: CallBack) :
                     Typeface.createFromFile(item.uri.toString())
                 }
                 tvFont.typeface = typeface
-            } catch (e: Exception) {
-                e.printStackTrace()
-                context.toast("Read ${item.name} Error: ${e.localizedMessage}")
+            }.onFailure {
+                it.printStackTrace()
+                context.toastOnUi("Read ${item.name} Error: ${it.localizedMessage}")
             }
             tvFont.text = item.name
-            root.onClick { callBack.onClick(item) }
-            if (item.name == callBack.curFilePath.substringAfterLast(File.separator)) {
+            root.setOnClickListener { callBack.onClick(item) }
+            if (item.name == URLDecoder.decode(callBack.curFilePath, "utf-8")
+                    .substringAfterLast(File.separator)
+            ) {
                 ivChecked.visible()
             } else {
                 ivChecked.invisible()
@@ -59,7 +57,7 @@ class FontAdapter(context: Context, val callBack: CallBack) :
     }
 
     override fun registerListener(holder: ItemViewHolder, binding: ItemFontBinding) {
-        holder.itemView.onClick {
+        holder.itemView.setOnClickListener {
             getItem(holder.layoutPosition)?.let {
                 callBack.onClick(it)
             }
