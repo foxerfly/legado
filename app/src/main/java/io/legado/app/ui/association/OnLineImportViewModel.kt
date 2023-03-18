@@ -1,19 +1,29 @@
 package io.legado.app.ui.association
 
 import android.app.Application
+import androidx.core.net.toUri
 import io.legado.app.R
+import io.legado.app.constant.AppConst
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
+import io.legado.app.utils.FileUtils
+import io.legado.app.utils.externalCache
 import okhttp3.MediaType.Companion.toMediaType
+import splitties.init.appCtx
 
 class OnLineImportViewModel(app: Application) : BaseAssociationViewModel(app) {
 
     fun getText(url: String, success: (text: String) -> Unit) {
         execute {
             okHttpClient.newCallResponseBody {
-                url(url)
+                if (url.endsWith("#requestWithoutUA")) {
+                    url(url.substringBeforeLast("#requestWithoutUA"))
+                    header(AppConst.UA_NAME, "null")
+                } else {
+                    url(url)
+                }
             }.text("utf-8")
         }.onSuccess {
             success.invoke(it)
@@ -28,7 +38,12 @@ class OnLineImportViewModel(app: Application) : BaseAssociationViewModel(app) {
         execute {
             @Suppress("BlockingMethodInNonBlockingContext")
             okHttpClient.newCallResponseBody {
-                url(url)
+                if (url.endsWith("#requestWithoutUA")) {
+                    url(url.substringBeforeLast("#requestWithoutUA"))
+                    header(AppConst.UA_NAME, "null")
+                } else {
+                    url(url)
+                }
             }.bytes()
         }.onSuccess {
             success.invoke(it)
@@ -63,7 +78,12 @@ class OnLineImportViewModel(app: Application) : BaseAssociationViewModel(app) {
     fun determineType(url: String, finally: (title: String, msg: String) -> Unit) {
         execute {
             val rs = okHttpClient.newCallResponseBody {
-                url(url)
+                if (url.endsWith("#requestWithoutUA")) {
+                    url(url.substringBeforeLast("#requestWithoutUA"))
+                    header(AppConst.UA_NAME, "null")
+                } else {
+                    url(url)
+                }
             }
             when (rs.contentType()) {
                 "application/zip".toMediaType(),
@@ -72,8 +92,18 @@ class OnLineImportViewModel(app: Application) : BaseAssociationViewModel(app) {
                     importReadConfig(rs.bytes(), finally)
                 }
                 else -> {
-                    val json = rs.text("utf-8")
-                    importJson(json)
+                    val inputStream = rs.byteStream()
+                    val file = FileUtils.createFileIfNotExist(
+                        appCtx.externalCache,
+                        "download",
+                        "scheme_import_cache.json"
+                    )
+                    file.outputStream().use { out ->
+                        inputStream.use {
+                            it.copyTo(out)
+                        }
+                    }
+                    importJson(file.toUri())
                 }
             }
         }

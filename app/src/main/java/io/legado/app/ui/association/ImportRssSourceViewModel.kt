@@ -5,14 +5,15 @@ import androidx.lifecycle.MutableLiveData
 import com.jayway.jsonpath.JsonPath
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
+import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssSource
 import io.legado.app.exception.NoStackTraceException
-import io.legado.app.help.SourceHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
+import io.legado.app.help.source.SourceHelp
 import io.legado.app.utils.*
 
 class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
@@ -50,16 +51,19 @@ class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
         execute {
             val group = groupName?.trim()
             val keepName = AppConfig.importKeepName
+            val keepGroup = AppConfig.importKeepGroup
             val selectSource = arrayListOf<RssSource>()
             selectStatus.forEachIndexed { index, b ->
                 if (b) {
                     val source = allSources[index]
-                    if (keepName) {
-                        checkSources[index]?.let {
+                    checkSources[index]?.let {
+                        if (keepName) {
                             source.sourceName = it.sourceName
-                            source.sourceGroup = it.sourceGroup
-                            source.customOrder = it.customOrder
                         }
+                        if (keepGroup) {
+                            source.sourceGroup = it.sourceGroup
+                        }
+                        source.customOrder = it.customOrder
                     }
                     if (!group.isNullOrEmpty()) {
                         if (isAddGroup) {
@@ -100,12 +104,8 @@ class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
                     }
                 }
                 mText.isJsonArray() -> {
-                    val items: List<Map<String, Any>> = jsonPath.parse(mText).read("$")
-                    for (item in items) {
-                        val jsonItem = jsonPath.parse(item)
-                        RssSource.fromJsonDoc(jsonItem).getOrThrow().let {
-                            allSources.add(it)
-                        }
+                    RssSource.fromJsonArray(mText).getOrThrow().let {
+                        allSources.addAll(it)
                     }
                 }
                 mText.isAbsUrl() -> {
@@ -122,7 +122,12 @@ class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
 
     private suspend fun importSourceUrl(url: String) {
         okHttpClient.newCallResponseBody {
-            url(url)
+            if (url.endsWith("#requestWithoutUA")) {
+                url(url.substringBeforeLast("#requestWithoutUA"))
+                header(AppConst.UA_NAME, "null")
+            } else {
+                url(url)
+            }
         }.byteStream().let { body ->
             val items: List<Map<String, Any>> = jsonPath.parse(body).read("$")
             for (item in items) {

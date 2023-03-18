@@ -1,7 +1,6 @@
 package io.legado.app.help
 
-import android.content.Context
-import io.legado.app.R
+import android.net.Uri
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
@@ -12,19 +11,16 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.storage.Backup
 import io.legado.app.help.storage.Restore
-import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.webdav.Authorization
 import io.legado.app.lib.webdav.WebDav
 import io.legado.app.lib.webdav.WebDavException
 import io.legado.app.lib.webdav.WebDavFile
+import io.legado.app.model.remote.RemoteBookWebDav
 import io.legado.app.utils.*
-import kotlinx.coroutines.Dispatchers.IO
-import kotlinx.coroutines.Dispatchers.Main
+import io.legado.app.utils.compress.ZipUtils
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 import splitties.init.appCtx
 import java.io.File
-import java.text.SimpleDateFormat
 import java.util.*
 
 /**
@@ -32,15 +28,17 @@ import java.util.*
  */
 object AppWebDav {
     private const val defaultWebDavUrl = "https://dav.jianguoyun.com/dav/"
-    private val zipFilePath = "${appCtx.externalFiles.absolutePath}${File.separator}backup.zip"
     private val bookProgressUrl get() = "${rootWebDavUrl}bookProgress/"
     private val exportsWebDavUrl get() = "${rootWebDavUrl}books/"
-    val syncBookProgress get() = appCtx.getPrefBoolean(PreferKey.syncBookProgress, true)
 
     var authorization: Authorization? = null
         private set
 
+    var defaultBookWebDav: RemoteBookWebDav? = null
+
     val isOk get() = authorization != null
+
+    val isJianGuoYun get() = rootWebDavUrl.startsWith(defaultWebDavUrl, true)
 
     init {
         runBlocking {
@@ -48,7 +46,7 @@ object AppWebDav {
         }
     }
 
-    val rootWebDavUrl: String
+    private val rootWebDavUrl: String
         get() {
             val configUrl = appCtx.getPrefString(PreferKey.webDavUrl)?.trim()
             var url = if (configUrl.isNullOrEmpty()) defaultWebDavUrl else configUrl
@@ -61,13 +59,6 @@ object AppWebDav {
             return url
         }
 
-    private val backupFileName: String
-        get() {
-            val backupDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                .format(Date(System.currentTimeMillis()))
-            return "backup${backupDate}.zip"
-        }
-
     suspend fun upConfig() {
         kotlin.runCatching {
             authorization = null
@@ -78,13 +69,15 @@ object AppWebDav {
                 WebDav(rootWebDavUrl, mAuthorization).makeAsDir()
                 WebDav(bookProgressUrl, mAuthorization).makeAsDir()
                 WebDav(exportsWebDavUrl, mAuthorization).makeAsDir()
+                val rootBooksUrl = "${rootWebDavUrl}books"
+                defaultBookWebDav = RemoteBookWebDav(rootBooksUrl, mAuthorization)
                 authorization = mAuthorization
             }
         }
     }
 
     @Throws(Exception::class)
-    private suspend fun getBackupNames(): ArrayList<String> {
+    suspend fun getBackupNames(): ArrayList<String> {
         val names = arrayListOf<String>()
         authorization?.let {
             var files = WebDav(rootWebDavUrl, it).listFiles()
@@ -99,43 +92,21 @@ object AppWebDav {
         return names
     }
 
-    suspend fun showRestoreDialog(context: Context) {
-        val names = withContext(IO) { getBackupNames() }
-        if (names.isNotEmpty()) {
-            withContext(Main) {
-                context.selector(
-                    title = context.getString(R.string.select_restore_file),
-                    items = names
-                ) { _, index ->
-                    if (index in 0 until names.size) {
-                        Coroutine.async {
-                            restoreWebDav(names[index])
-                        }.onError {
-                            appCtx.toastOnUi("WebDav恢复出错\n${it.localizedMessage}")
-                        }
-                    }
-                }
-            }
-        } else {
-            throw NoStackTraceException("Web dav no back up file")
-        }
-    }
-
     @Throws(WebDavException::class)
     suspend fun restoreWebDav(name: String) {
         authorization?.let {
             val webDav = WebDav(rootWebDavUrl + name, it)
-            webDav.downloadTo(zipFilePath, true)
-            @Suppress("BlockingMethodInNonBlockingContext")
-            ZipUtils.unzipFile(zipFilePath, Backup.backupPath)
+            webDav.downloadTo(Backup.zipFilePath, true)
+            FileUtils.delete(Backup.backupPath)
+            ZipUtils.unZipToPath(File(Backup.zipFilePath), Backup.backupPath)
             Restore.restoreDatabase()
             Restore.restoreConfig()
         }
     }
 
-    suspend fun hasBackUp(): Boolean {
+    suspend fun hasBackUp(backUpName: String): Boolean {
         authorization?.let {
-            val url = "$rootWebDavUrl$backupFileName"
+            val url = "$rootWebDavUrl${backUpName}"
             return WebDav(url, it).exists()
         }
         return false
@@ -159,22 +130,20 @@ object AppWebDav {
         }
     }
 
+    /**
+     * webDav备份
+     * @param fileName 备份文件名
+     */
     @Throws(Exception::class)
-    suspend fun backUpWebDav(path: String) {
+    suspend fun backUpWebDav(fileName: String) {
         if (!NetworkUtils.isAvailable()) return
         authorization?.let {
-            val paths = arrayListOf(*Backup.backupFileNames)
-            for (i in 0 until paths.size) {
-                paths[i] = path + File.separator + paths[i]
-            }
-            FileUtils.delete(zipFilePath)
-            if (ZipUtils.zipFiles(paths, zipFilePath)) {
-                val putUrl = "$rootWebDavUrl$backupFileName"
-                WebDav(putUrl, it).upload(zipFilePath)
-            }
+            val putUrl = "$rootWebDavUrl$fileName"
+            WebDav(putUrl, it).upload(Backup.zipFilePath)
         }
     }
 
+    @Suppress("unused")
     suspend fun exportWebDav(byteArray: ByteArray, fileName: String) {
         if (!NetworkUtils.isAvailable()) return
         try {
@@ -185,14 +154,29 @@ object AppWebDav {
             }
         } catch (e: Exception) {
             val msg = "WebDav导出\n${e.localizedMessage}"
-            AppLog.put(msg)
+            AppLog.put(msg, e)
+            appCtx.toastOnUi(msg)
+        }
+    }
+
+    suspend fun exportWebDav(uri: Uri, fileName: String) {
+        if (!NetworkUtils.isAvailable()) return
+        try {
+            authorization?.let {
+                // 如果导出的本地文件存在,开始上传
+                val putUrl = exportsWebDavUrl + fileName
+                WebDav(putUrl, it).upload(uri, "text/plain")
+            }
+        } catch (e: Exception) {
+            val msg = "WebDav导出\n${e.localizedMessage}"
+            AppLog.put(msg, e)
             appCtx.toastOnUi(msg)
         }
     }
 
     fun uploadBookProgress(book: Book) {
         val authorization = authorization ?: return
-        if (!syncBookProgress) return
+        if (!AppConfig.syncBookProgress) return
         if (!NetworkUtils.isAvailable()) return
         Coroutine.async {
             val bookProgress = BookProgress(book)
@@ -200,25 +184,25 @@ object AppWebDav {
             val url = getProgressUrl(book.name, book.author)
             WebDav(url, authorization).upload(json.toByteArray(), "application/json")
         }.onError {
-            AppLog.put("上传进度失败\n${it.localizedMessage}")
+            AppLog.put("上传进度失败\n${it.localizedMessage}", it)
         }
     }
 
     fun uploadBookProgress(bookProgress: BookProgress) {
         val authorization = authorization ?: return
-        if (!syncBookProgress) return
+        if (!AppConfig.syncBookProgress) return
         if (!NetworkUtils.isAvailable()) return
         Coroutine.async {
             val json = GSON.toJson(bookProgress)
             val url = getProgressUrl(bookProgress.name, bookProgress.author)
             WebDav(url, authorization).upload(json.toByteArray(), "application/json")
         }.onError {
-            AppLog.put("上传进度失败\n${it.localizedMessage}")
+            AppLog.put("上传进度失败\n${it.localizedMessage}", it)
         }
     }
 
     private fun getProgressUrl(name: String, author: String): String {
-        return bookProgressUrl + name + "_" + author + ".json"
+        return bookProgressUrl + UrlUtil.replaceReservedChar("${name}_${author}") + ".json"
     }
 
     /**

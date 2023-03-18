@@ -1,5 +1,6 @@
 package io.legado.app.ui.config
 
+import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Bundle
@@ -11,13 +12,13 @@ import android.view.View
 import androidx.core.view.MenuProvider
 import androidx.documentfile.provider.DocumentFile
 import androidx.fragment.app.activityViewModels
-import androidx.lifecycle.lifecycleScope
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
+import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.AppWebDav
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
@@ -27,23 +28,33 @@ import io.legado.app.help.storage.BackupConfig
 import io.legado.app.help.storage.ImportOldData
 import io.legado.app.help.storage.Restore
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.permission.Permissions
 import io.legado.app.lib.permission.PermissionsCompat
 import io.legado.app.lib.prefs.fragment.PreferenceFragment
 import io.legado.app.lib.theme.primaryColor
+import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.document.HandleFileContract
 import io.legado.app.ui.widget.dialog.TextDialog
+import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.utils.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Dispatchers.Main
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import splitties.init.appCtx
 import kotlin.collections.set
+import kotlin.coroutines.coroutineContext
 
 class BackupConfigFragment : PreferenceFragment(),
     SharedPreferences.OnSharedPreferenceChangeListener,
     MenuProvider {
 
     private val viewModel by activityViewModels<ConfigViewModel>()
+    private val waitDialog by lazy { WaitDialog(requireContext()) }
+    private var backupJob: Job? = null
+    private var restoreJob: Job? = null
 
     private val selectBackupPath = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
@@ -81,20 +92,10 @@ class BackupConfigFragment : PreferenceFragment(),
             }
         }
     }
-    private val restoreDir = registerForActivityResult(HandleFileContract()) {
+    private val restoreDoc = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
-            if (uri.isContentScheme()) {
-                AppConfig.backupPath = uri.toString()
-                Coroutine.async {
-                    Restore.restore(appCtx, uri.toString())
-                }
-            } else {
-                uri.path?.let { path ->
-                    AppConfig.backupPath = path
-                    Coroutine.async {
-                        Restore.restore(appCtx, path)
-                    }
-                }
+            Coroutine.async {
+                Restore.restore(appCtx, uri)
             }
         }
     }
@@ -112,13 +113,27 @@ class BackupConfigFragment : PreferenceFragment(),
                     InputType.TYPE_TEXT_VARIATION_PASSWORD or InputType.TYPE_CLASS_TEXT
             }
         }
+        findPreference<EditTextPreference>(PreferKey.webDavDir)?.let {
+            it.setOnBindEditTextListener { editText ->
+                editText.text = AppConfig.webDavDir?.toEditable()
+            }
+        }
+        findPreference<EditTextPreference>(PreferKey.webDavDeviceName)?.let {
+            it.setOnBindEditTextListener { editText ->
+                editText.text = AppConfig.webDavDeviceName?.toEditable()
+            }
+        }
         upPreferenceSummary(PreferKey.webDavUrl, getPrefString(PreferKey.webDavUrl))
         upPreferenceSummary(PreferKey.webDavAccount, getPrefString(PreferKey.webDavAccount))
         upPreferenceSummary(PreferKey.webDavPassword, getPrefString(PreferKey.webDavPassword))
         upPreferenceSummary(PreferKey.webDavDir, AppConfig.webDavDir)
+        upPreferenceSummary(PreferKey.webDavDeviceName, AppConfig.webDavDeviceName)
         upPreferenceSummary(PreferKey.backupPath, getPrefString(PreferKey.backupPath))
         findPreference<io.legado.app.lib.prefs.Preference>("web_dav_restore")
-            ?.onLongClick { restoreDir.launch(); true }
+            ?.onLongClick {
+                restoreFromLocal()
+                true
+            }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -143,13 +158,14 @@ class BackupConfigFragment : PreferenceFragment(),
                 showHelp()
                 return true
             }
+            R.id.menu_log -> showDialogFragment<AppLogDialog>()
         }
         return false
     }
 
     private fun showHelp() {
         val text = String(requireContext().assets.open("help/webDavHelp.md").readBytes())
-        showDialogFragment(TextDialog(text, TextDialog.Mode.MD))
+        showDialogFragment(TextDialog(getString(R.string.help), text, TextDialog.Mode.MD))
     }
 
     override fun onDestroy() {
@@ -167,6 +183,7 @@ class BackupConfigFragment : PreferenceFragment(),
                 upPreferenceSummary(key, getPrefString(key))
                 viewModel.upWebDavConfig()
             }
+            PreferKey.webDavDeviceName -> upPreferenceSummary(key, getPrefString(key))
         }
     }
 
@@ -245,7 +262,13 @@ class BackupConfigFragment : PreferenceFragment(),
                 val uri = Uri.parse(backupPath)
                 val doc = DocumentFile.fromTreeUri(requireContext(), uri)
                 if (doc?.canWrite() == true) {
+                    waitDialog.setText("备份中…")
+                    waitDialog.setOnCancelListener {
+                        backupJob?.cancel()
+                    }
+                    waitDialog.show()
                     Coroutine.async {
+                        backupJob = coroutineContext[Job]
                         Backup.backup(requireContext(), backupPath)
                     }.onSuccess {
                         appCtx.toastOnUi(R.string.backup_success)
@@ -257,6 +280,8 @@ class BackupConfigFragment : PreferenceFragment(),
                                 it.localizedMessage
                             )
                         )
+                    }.onFinally(Main) {
+                        waitDialog.dismiss()
                     }
                 } else {
                     backupDir.launch()
@@ -268,11 +293,17 @@ class BackupConfigFragment : PreferenceFragment(),
     }
 
     private fun backupUsePermission(path: String) {
-        PermissionsCompat.Builder(this)
+        PermissionsCompat.Builder()
             .addPermissions(*Permissions.Group.STORAGE)
             .rationale(R.string.tip_perm_request_storage)
             .onGranted {
+                waitDialog.setText("备份中…")
+                waitDialog.setOnCancelListener {
+                    backupJob?.cancel()
+                }
+                waitDialog.show()
                 Coroutine.async {
+                    backupJob = coroutineContext[Job]
                     AppConfig.backupPath = path
                     Backup.backup(requireContext(), path)
                 }.onSuccess {
@@ -280,15 +311,24 @@ class BackupConfigFragment : PreferenceFragment(),
                 }.onError {
                     AppLog.put("备份出错\n${it.localizedMessage}", it)
                     appCtx.toastOnUi(appCtx.getString(R.string.backup_fail, it.localizedMessage))
+                }.onFinally(Main) {
+                    waitDialog.dismiss()
                 }
             }
             .request()
     }
 
     fun restore() {
+        waitDialog.setText(R.string.loading)
+        waitDialog.setOnCancelListener {
+            restoreJob?.cancel()
+        }
+        waitDialog.show()
         Coroutine.async {
-            AppWebDav.showRestoreDialog(requireContext())
+            restoreJob = coroutineContext[Job]
+            showRestoreDialog(requireContext())
         }.onError {
+            AppLog.put("恢复备份出错WebDavError\n${it.localizedMessage}", it)
             alert {
                 setTitle(R.string.restore)
                 setMessage("WebDavError\n${it.localizedMessage}\n将从本地备份恢复。")
@@ -297,42 +337,62 @@ class BackupConfigFragment : PreferenceFragment(),
                 }
                 cancelButton()
             }
+        }.onFinally(Main) {
+            waitDialog.dismiss()
+        }
+    }
+
+    private suspend fun showRestoreDialog(context: Context) {
+        val names = withContext(Dispatchers.IO) { AppWebDav.getBackupNames() }
+        if (AppWebDav.isJianGuoYun && names.size > 700) {
+            context.toastOnUi("由于坚果云限制，部分备份可能未显示")
+        }
+        if (names.isNotEmpty()) {
+            coroutineContext.ensureActive()
+            withContext(Main) {
+                context.selector(
+                    title = context.getString(R.string.select_restore_file),
+                    items = names
+                ) { _, index ->
+                    if (index in 0 until names.size) {
+                        listView.post {
+                            restoreWebDav(names[index])
+                        }
+                    }
+                }
+            }
+        } else {
+            throw NoStackTraceException("Web dav no back up file")
+        }
+    }
+
+    private fun restoreWebDav(name: String) {
+        waitDialog.setText("恢复中…")
+        waitDialog.show()
+        val task = Coroutine.async {
+            AppWebDav.restoreWebDav(name)
+        }.onError {
+            AppLog.put("WebDav恢复出错\n${it.localizedMessage}", it)
+            appCtx.toastOnUi("WebDav恢复出错\n${it.localizedMessage}")
+        }.onFinally(Main) {
+            waitDialog.dismiss()
+        }
+        waitDialog.setOnCancelListener {
+            task.cancel()
         }
     }
 
     private fun restoreFromLocal() {
-        val backupPath = getPrefString(PreferKey.backupPath)
-        if (backupPath?.isNotEmpty() == true) {
-            if (backupPath.isContentScheme()) {
-                val uri = Uri.parse(backupPath)
-                val doc = DocumentFile.fromTreeUri(requireContext(), uri)
-                if (doc?.canWrite() == true) {
-                    lifecycleScope.launch {
-                        Restore.restore(requireContext(), backupPath)
-                    }
-                } else {
-                    restoreDir.launch()
-                }
-            } else {
-                restoreUsePermission(backupPath)
-            }
-        } else {
-            restoreDir.launch()
+        restoreDoc.launch {
+            title = getString(R.string.select_restore_file)
+            mode = HandleFileContract.FILE
+            allowExtensions = arrayOf("zip")
         }
     }
 
-    private fun restoreUsePermission(path: String) {
-        PermissionsCompat.Builder(this)
-            .addPermissions(*Permissions.Group.STORAGE)
-            .rationale(R.string.tip_perm_request_storage)
-            .onGranted {
-                Coroutine.async {
-                    AppConfig.backupPath = path
-                    Restore.restoreDatabase(path)
-                    Restore.restoreConfig(path)
-                }
-            }
-            .request()
+    override fun onDestroyView() {
+        super.onDestroyView()
+        waitDialog.dismiss()
     }
 
 }

@@ -8,9 +8,7 @@ import android.graphics.Bitmap.Config
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import com.google.android.renderscript.Toolkit
-import java.io.FileInputStream
-import java.io.IOException
-import java.io.InputStream
+import java.io.*
 import kotlin.math.*
 
 
@@ -79,23 +77,6 @@ object BitmapUtils {
             opts.inSampleSize = computeSampleSize(opts, -1, 128 * 128)
             opts.inJustDecodeBounds = false
             BitmapFactory.decodeFileDescriptor(fis.fd, null, opts)
-        }
-    }
-
-    /** 从path中获取Bitmap图片
-     * @param path 图片路径
-     * @return
-     */
-    @Throws(IOException::class)
-    fun decodeBitmap(inputStream: InputStream): Bitmap? {
-        return inputStream.use {
-            val opts = BitmapFactory.Options()
-            opts.inJustDecodeBounds = true
-
-            BitmapFactory.decodeStream(inputStream, null, opts)
-            opts.inSampleSize = computeSampleSize(opts, -1, 128 * 128)
-            opts.inJustDecodeBounds = false
-            BitmapFactory.decodeStream(inputStream, null, opts)
         }
     }
 
@@ -225,6 +206,18 @@ object BitmapUtils {
         }
     }
 
+    /**
+     * 将Bitmap转换成InputStream
+     *
+     * @param bitmap
+     * @return
+     */
+    fun toInputStream(bitmap: Bitmap): InputStream {
+        val bos = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 90 /*ignored for PNG*/, bos)
+        return ByteArrayInputStream(bos.toByteArray()).also { bos.close() }
+    }
+
 }
 
 /**
@@ -273,4 +266,5 @@ fun Bitmap.getMeanColor(): Int {
         averagePixelGreen + 3,
         averagePixelBlue + 3
     )
+
 }

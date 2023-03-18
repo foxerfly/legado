@@ -201,11 +201,18 @@ class AnalyzeRule(
         return getString(ruleList, mContent, isUrl)
     }
 
+    fun getString(ruleStr: String?, unescape: Boolean): String {
+        if (TextUtils.isEmpty(ruleStr)) return ""
+        val ruleList = splitSourceRule(ruleStr)
+        return getString(ruleList, unescape = unescape)
+    }
+
     @JvmOverloads
     fun getString(
         ruleList: List<SourceRule>,
         mContent: Any? = null,
-        isUrl: Boolean = false
+        isUrl: Boolean = false,
+        unescape: Boolean = true
     ): String {
         var result: Any? = null
         val content = mContent ?: this.content
@@ -239,13 +246,15 @@ class AnalyzeRule(
             }
         }
         if (result == null) result = ""
-        val str = kotlin.runCatching {
-            Entities.unescape(result.toString())
-        }.onFailure {
-            log("Entities.unescape() error\n${it.localizedMessage}")
-        }.getOrElse {
-            result.toString()
-        }
+        val str = if (unescape) {
+            kotlin.runCatching {
+                Entities.unescape(result.toString())
+            }.onFailure {
+                log("Entities.unescape() error\n${it.localizedMessage}")
+            }.getOrElse {
+                result.toString()
+            }
+        } else result.toString()
         if (isUrl) {
             return if (str.isBlank()) {
                 baseUrl ?: ""
@@ -610,13 +619,20 @@ class AnalyzeRule(
         XPath, Json, Default, Js, Regex
     }
 
+    /**
+     * 保存数据
+     */
     fun put(key: String, value: String): String {
         chapter?.putVariable(key, value)
             ?: book?.putVariable(key, value)
             ?: ruleData?.putVariable(key, value)
+            ?: source?.put(key, value)
         return value
     }
 
+    /**
+     * 获取保存的数据
+     */
     fun get(key: String): String {
         when (key) {
             "bookName" -> book?.let {
@@ -629,6 +645,7 @@ class AnalyzeRule(
         return chapter?.getVariable(key)
             ?: book?.getVariable(key)
             ?: ruleData?.getVariable(key)
+            ?: source?.get(key)
             ?: ""
     }
 
@@ -658,7 +675,12 @@ class AnalyzeRule(
     /**
      * js实现跨域访问,不能删
      */
-    override fun ajax(urlStr: String): String? {
+    override fun ajax(url: Any): String? {
+        val urlStr = if (url is List<*>) {
+            url.firstOrNull().toString()
+        } else {
+            url.toString()
+        }
         return runBlocking {
             kotlin.runCatching {
                 val analyzeUrl = AnalyzeUrl(urlStr, source = source, ruleData = book)
@@ -667,7 +689,7 @@ class AnalyzeRule(
                 log("ajax(${urlStr}) error\n${it.stackTraceToString()}")
                 it.printOnDebug()
             }.getOrElse {
-                it.msg
+                it.stackTraceStr
             }
         }
     }
@@ -700,7 +722,7 @@ class AnalyzeRule(
                             book.putVariable(entry.key, entry.value)
                         }
                     }
-                WebBook.getBookInfoAwait(this, bookSource, book, false)
+                WebBook.getBookInfoAwait(bookSource, book, false)
             }
         }
     }
@@ -714,7 +736,7 @@ class AnalyzeRule(
         if (bookSource == null || book == null) return
         runBlocking {
             withTimeout(1800000) {
-                WebBook.getBookInfoAwait(this, bookSource, book)
+                WebBook.getBookInfoAwait(bookSource, book)
             }
         }
     }
@@ -728,7 +750,7 @@ class AnalyzeRule(
         if (bookSource == null || book == null) return
         runBlocking {
             withTimeout(1800000) {
-                WebBook.getBookInfoAwait(this, bookSource, book)
+                WebBook.getBookInfoAwait(bookSource, book)
             }
         }
     }

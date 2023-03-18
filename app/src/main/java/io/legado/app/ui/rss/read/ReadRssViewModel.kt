@@ -3,41 +3,38 @@ package io.legado.app.ui.rss.read
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
-import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import android.util.Base64
 import android.webkit.URLUtil
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import io.legado.app.R
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppConst
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssArticle
 import io.legado.app.data.entities.RssSource
 import io.legado.app.data.entities.RssStar
+import io.legado.app.help.TTS
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.rss.Rss
 import io.legado.app.utils.*
 import kotlinx.coroutines.Dispatchers.IO
+import splitties.init.appCtx
 import java.io.File
 import java.util.*
 
 
-class ReadRssViewModel(application: Application) : BaseViewModel(application),
-    TextToSpeech.OnInitListener {
-    var callBack: CallBack? = null
+class ReadRssViewModel(application: Application) : BaseViewModel(application) {
     var rssSource: RssSource? = null
     var rssArticle: RssArticle? = null
+    var tts: TTS? = null
     val contentLiveData = MutableLiveData<String>()
     val urlLiveData = MutableLiveData<AnalyzeUrl>()
     var rssStar: RssStar? = null
-    var textToSpeech: TextToSpeech? = null
-    private var ttsInitFinish = false
-    private var ttsTextList = arrayListOf<String>()
+    val upTtsMenuData = MutableLiveData<Boolean>()
+    val upStarMenuData = MutableLiveData<Boolean>()
 
     fun initData(intent: Intent) {
         execute {
@@ -76,7 +73,7 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application),
                 }
             }
         }.onFinally {
-            callBack?.upStarMenu()
+            upStarMenuData.postValue(true)
         }
     }
 
@@ -113,7 +110,10 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application),
                 } else {
                     finish.invoke()
                 }
-            } ?: finish.invoke()
+            } ?: let {
+                appCtx.toastOnUi("订阅源不存在")
+                finish.invoke()
+            }
         } ?: finish.invoke()
     }
 
@@ -127,7 +127,7 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application),
                 rssStar = it
             }
         }.onSuccess {
-            callBack?.upStarMenu()
+            upStarMenuData.postValue(true)
         }
     }
 
@@ -192,63 +192,26 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application),
     }
 
     @Synchronized
-    override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            textToSpeech?.setOnUtteranceProgressListener(TTSUtteranceListener())
-            ttsInitFinish = true
-            play()
-        } else {
-            context.toastOnUi(R.string.tts_init_failed)
-        }
-    }
+    fun readAloud(text: String) {
+        if (tts == null) {
+            tts = TTS().apply {
+                setSpeakStateListener(object : TTS.SpeakStateListener {
+                    override fun onStart() {
+                        upTtsMenuData.postValue(true)
+                    }
 
-    @Synchronized
-    private fun play() {
-        if (!ttsInitFinish) return
-        textToSpeech?.stop()
-        ttsTextList.forEach {
-            textToSpeech?.speak(it, TextToSpeech.QUEUE_ADD, null, "rss")
+                    override fun onDone() {
+                        upTtsMenuData.postValue(false)
+                    }
+                })
+            }
         }
-    }
-
-    fun readAloud(textArray: Array<String>) {
-        ttsTextList.clear()
-        ttsTextList.addAll(textArray)
-        textToSpeech?.let {
-            play()
-        } ?: let {
-            textToSpeech = TextToSpeech(context, this)
-        }
+        tts?.speak(text)
     }
 
     override fun onCleared() {
         super.onCleared()
-        textToSpeech?.stop()
-        textToSpeech?.shutdown()
+        tts?.clearTts()
     }
 
-    /**
-     * 朗读监听
-     */
-    private inner class TTSUtteranceListener : UtteranceProgressListener() {
-
-        override fun onStart(s: String) {
-            callBack?.upTtsMenu(true)
-        }
-
-        override fun onDone(s: String) {
-            callBack?.upTtsMenu(false)
-        }
-
-        @Deprecated("Deprecated in Java")
-        override fun onError(s: String) {
-
-        }
-
-    }
-
-    interface CallBack {
-        fun upStarMenu()
-        fun upTtsMenu(isPlaying: Boolean)
-    }
 }

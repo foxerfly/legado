@@ -10,11 +10,13 @@ import androidx.appcompat.widget.Toolbar
 import androidx.core.os.bundleOf
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.Lifecycle.State.STARTED
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
-import io.legado.app.constant.AppPattern
+import io.legado.app.constant.BookType
 import io.legado.app.constant.EventBus
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
@@ -35,7 +37,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 
-
+/**
+ * 换源界面
+ */
 class ChangeBookSourceDialog() : BaseDialogFragment(R.layout.dialog_book_change_source),
     Toolbar.OnMenuItemClickListener,
     ChangeBookSourceAdapter.CallBack {
@@ -179,18 +183,18 @@ class ChangeBookSourceDialog() : BaseDialogFragment(R.layout.dialog_book_change_
             }
             binding.toolBar.menu.applyTint(requireContext())
         }
-        lifecycleScope.launchWhenStarted {
-            viewModel.searchDataFlow.conflate().collect {
-                adapter.setItems(it)
-                delay(1000)
+        lifecycleScope.launch {
+            repeatOnLifecycle(STARTED) {
+                viewModel.searchDataFlow.conflate().collect {
+                    adapter.setItems(it)
+                    delay(1000)
+                }
             }
         }
         launch {
-            appDb.bookSourceDao.flowGroupEnabled().conflate().collect {
+            appDb.bookSourceDao.flowEnabledGroups().conflate().collect {
                 groups.clear()
-                it.map { group ->
-                    groups.addAll(group.splitNotBlank(AppPattern.splitGroupRegex))
-                }
+                groups.addAll(it)
                 upGroupMenu()
             }
         }
@@ -216,6 +220,7 @@ class ChangeBookSourceDialog() : BaseDialogFragment(R.layout.dialog_book_change_
             }
             R.id.menu_start_stop -> viewModel.startOrStopSearch()
             R.id.menu_source_manage -> startActivity<BookSourceActivity>()
+            R.id.menu_refresh_list -> viewModel.startRefreshList()
             else -> if (item?.groupId == R.id.source_group) {
                 if (!item.isChecked) {
                     item.isChecked = true
@@ -234,7 +239,7 @@ class ChangeBookSourceDialog() : BaseDialogFragment(R.layout.dialog_book_change_
 
     private fun scrollToDurSource() {
         adapter.getItems().forEachIndexed { index, searchBook ->
-            if (searchBook.bookUrl == bookUrl) {
+            if (searchBook.bookUrl == oldBookUrl) {
                 (binding.recyclerView.layoutManager as LinearLayoutManager)
                     .scrollToPositionWithOffset(index, 60.dpToPx())
                 return
@@ -243,7 +248,8 @@ class ChangeBookSourceDialog() : BaseDialogFragment(R.layout.dialog_book_change_
     }
 
     override fun changeTo(searchBook: SearchBook) {
-        if (searchBook.type == callBack?.oldBook?.type) {
+        val oldBookType = callBack?.oldBook?.type?.and(BookType.updateError.inv())
+        if (searchBook.type == oldBookType) {
             changeSource(searchBook) {
                 dismissAllowingStateLoss()
             }
@@ -262,7 +268,7 @@ class ChangeBookSourceDialog() : BaseDialogFragment(R.layout.dialog_book_change_
         }
     }
 
-    override val bookUrl: String?
+    override val oldBookUrl: String?
         get() = callBack?.oldBook?.bookUrl
 
     override fun topSource(searchBook: SearchBook) {
@@ -285,24 +291,35 @@ class ChangeBookSourceDialog() : BaseDialogFragment(R.layout.dialog_book_change_
 
     override fun deleteSource(searchBook: SearchBook) {
         viewModel.del(searchBook)
-        if (bookUrl == searchBook.bookUrl) {
+        if (oldBookUrl == searchBook.bookUrl) {
             viewModel.autoChangeSource(callBack?.oldBook?.type) { book, toc, source ->
                 callBack?.changeTo(source, book, toc)
             }
         }
     }
 
+    override fun setBookScore(searchBook: SearchBook, score: Int) {
+        viewModel.setBookScore(searchBook,score)
+    }
+
+    override fun getBookScore(searchBook: SearchBook): Int {
+        return viewModel.getBookScore(searchBook)
+    }
+
     private fun changeSource(searchBook: SearchBook, onSuccess: (() -> Unit)? = null) {
         waitDialog.setText(R.string.load_toc)
         waitDialog.show()
-        val book = searchBook.toBook()
-        viewModel.getToc(book, {
+        val book = viewModel.bookMap[searchBook.bookUrl] ?: searchBook.toBook()
+        val coroutine = viewModel.getToc(book, {
             waitDialog.dismiss()
             toastOnUi(it)
         }) { toc, source ->
             waitDialog.dismiss()
             callBack?.changeTo(source, book, toc)
             onSuccess?.invoke()
+        }
+        waitDialog.setOnCancelListener {
+            coroutine.cancel()
         }
     }
 
@@ -336,7 +353,7 @@ class ChangeBookSourceDialog() : BaseDialogFragment(R.layout.dialog_book_change_
             adapter.notifyItemRangeChanged(
                 0,
                 adapter.itemCount,
-                bundleOf(Pair("upCurSource", bookUrl))
+                bundleOf(Pair("upCurSource", oldBookUrl))
             )
         }
     }

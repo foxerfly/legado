@@ -12,6 +12,7 @@ import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import splitties.init.appCtx
 import splitties.views.onClick
 import java.io.FileOutputStream
 
@@ -19,21 +20,31 @@ class GroupEditDialog() : BaseDialogFragment(R.layout.dialog_book_group_edit) {
 
     constructor(bookGroup: BookGroup? = null) : this() {
         arguments = Bundle().apply {
-            putParcelable("group", bookGroup)
+            putParcelable("group", bookGroup?.copy())
         }
     }
 
     private val binding by viewBinding(DialogBookGroupEditBinding::bind)
     private val viewModel by viewModels<GroupViewModel>()
     private var bookGroup: BookGroup? = null
-    val selectImage = registerForActivityResult(SelectImageContract()) {
-        readUri(it?.uri) { fileDoc, inputStream ->
-            var file = requireContext().externalFiles
-            file = FileUtils.createFileIfNotExist(file, "covers", fileDoc.name)
-            FileOutputStream(file).use { outputStream ->
-                inputStream.copyTo(outputStream)
+    private val selectImage = registerForActivityResult(SelectImageContract()) {
+        it ?: return@registerForActivityResult
+        it.uri ?: return@registerForActivityResult
+        readUri(it.uri) { fileDoc, inputStream ->
+            try {
+                var file = requireContext().externalFiles
+                val suffix = fileDoc.name.substringAfterLast(".")
+                val fileName = it.uri.inputStream(requireContext()).getOrThrow().use { tmp ->
+                    MD5Utils.md5Encode(tmp) + ".$suffix"
+                }
+                file = FileUtils.createFileIfNotExist(file, "covers", fileName)
+                FileOutputStream(file).use { outputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+                binding.ivCover.load(file.absolutePath)
+            } catch (e: Exception) {
+                appCtx.toastOnUi(e.localizedMessage)
             }
-            binding.ivCover.load(file.absolutePath)
         }
     }
 
@@ -44,9 +55,12 @@ class GroupEditDialog() : BaseDialogFragment(R.layout.dialog_book_group_edit) {
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         binding.toolBar.setBackgroundColor(primaryColor)
+        @Suppress("DEPRECATION")
         bookGroup = arguments?.getParcelable("group")
         bookGroup?.let {
+            binding.btnDelete.visible(it.groupId > 0 || it.groupId == Long.MIN_VALUE)
             binding.tieGroupName.setText(it.groupName)
+            binding.spSort.setSelection(it.bookSort + 1)
             binding.ivCover.load(it.cover)
         } ?: let {
             binding.toolBar.title = getString(R.string.add_group)
@@ -68,6 +82,7 @@ class GroupEditDialog() : BaseDialogFragment(R.layout.dialog_book_group_edit) {
                     bookGroup?.let {
                         it.groupName = groupName
                         it.cover = binding.ivCover.bitmapPath
+                        it.bookSort = binding.spSort.selectedItemPosition - 1
                         viewModel.upGroup(it) {
                             dismiss()
                         }

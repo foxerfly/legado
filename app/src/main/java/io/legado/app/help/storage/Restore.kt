@@ -13,10 +13,14 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.*
 import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.LauncherIconHelp
+import io.legado.app.help.book.isLocal
+import io.legado.app.help.book.upType
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ThemeConfig
+import io.legado.app.model.localBook.LocalBook
 import io.legado.app.utils.*
+import io.legado.app.utils.compress.ZipUtils
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.delay
@@ -24,33 +28,21 @@ import kotlinx.coroutines.withContext
 import splitties.init.appCtx
 import java.io.File
 import java.io.FileInputStream
-import java.io.FileOutputStream
 
-
+/**
+ * 恢复
+ */
 object Restore {
 
-    suspend fun restore(context: Context, path: String) {
+    suspend fun restore(context: Context, uri: Uri) {
         kotlin.runCatching {
-            if (path.isContentScheme()) {
-                DocumentFile.fromTreeUri(context, Uri.parse(path))?.listFiles()?.forEach { doc ->
-                    if (Backup.backupFileNames.contains(doc.name)) {
-                        context.contentResolver.openInputStream(doc.uri)?.use { inputStream ->
-                            val file = File("${Backup.backupPath}${File.separator}${doc.name}")
-                            FileOutputStream(file).use { outputStream ->
-                                inputStream.copyTo(outputStream)
-                            }
-                        }
-                    }
+            FileUtils.delete(Backup.backupPath)
+            if (uri.isContentScheme()) {
+                DocumentFile.fromSingleUri(context, uri)!!.openInputStream()!!.use {
+                    ZipUtils.unZipToPath(it, Backup.backupPath)
                 }
             } else {
-                val dir = File(path)
-                for (fileName in Backup.backupFileNames) {
-                    val file = dir.getFile(fileName)
-                    if (file.exists()) {
-                        val target = File("${Backup.backupPath}${File.separator}$fileName")
-                        file.copyTo(target, true)
-                    }
-                }
+                ZipUtils.unZipToPath(File(uri.path!!), Backup.backupPath)
             }
         }.onFailure {
             AppLog.put("恢复复制文件出错\n${it.localizedMessage}", it)
@@ -63,6 +55,13 @@ object Restore {
     suspend fun restoreDatabase(path: String = Backup.backupPath) {
         withContext(IO) {
             fileToListT<Book>(path, "bookshelf.json")?.let {
+                it.forEach { book ->
+                    book.upType()
+                }
+                it.filter { book -> book.isLocal }
+                    .forEach { book ->
+                        book.coverUrl = LocalBook.getCoverPath(book)
+                    }
                 appDb.bookDao.insert(*it.toTypedArray())
             }
             fileToListT<Bookmark>(path, "bookmark.json")?.let {
@@ -100,6 +99,15 @@ object Restore {
             fileToListT<HttpTTS>(path, "httpTTS.json")?.let {
                 appDb.httpTTSDao.insert(*it.toTypedArray())
             }
+            fileToListT<DictRule>(path, "dictRule.json")?.let {
+                appDb.dictRuleDao.insert(*it.toTypedArray())
+            }
+            fileToListT<Server>(path, "servers.json")?.let {
+                appDb.serverDao.insert(*it.toTypedArray())
+            }
+            fileToListT<KeyboardAssist>(path, "keyboardAssists.json")?.let {
+                appDb.keyboardAssistsDao.insert(*it.toTypedArray())
+            }
             fileToListT<ReadRecord>(path, "readRecord.json")?.let {
                 it.forEach { readRecord ->
                     //判断是不是本机记录
@@ -120,8 +128,7 @@ object Restore {
     suspend fun restoreConfig(path: String = Backup.backupPath) {
         withContext(IO) {
             try {
-                val file =
-                    FileUtils.createFileIfNotExist("$path${File.separator}${DirectLinkUpload.ruleFileName}")
+                val file = File(path, DirectLinkUpload.ruleFileName)
                 if (file.exists()) {
                     val json = file.readText()
                     ACache.get(cacheDir = false).put(DirectLinkUpload.ruleFileName, json)
@@ -130,8 +137,7 @@ object Restore {
                 AppLog.put("直链上传出错\n${e.localizedMessage}", e)
             }
             try {
-                val file =
-                    FileUtils.createFileIfNotExist("$path${File.separator}${ThemeConfig.configFileName}")
+                val file = File(path, ThemeConfig.configFileName)
                 if (file.exists()) {
                     FileUtils.delete(ThemeConfig.configFilePath)
                     file.copyTo(File(ThemeConfig.configFilePath))
@@ -143,8 +149,7 @@ object Restore {
             if (!BackupConfig.ignoreReadConfig) {
                 //恢复阅读界面配置
                 try {
-                    val file =
-                        FileUtils.createFileIfNotExist("$path${File.separator}${ReadBookConfig.configFileName}")
+                    val file = File(path, ReadBookConfig.configFileName)
                     if (file.exists()) {
                         FileUtils.delete(ReadBookConfig.configFilePath)
                         file.copyTo(File(ReadBookConfig.configFilePath))
@@ -154,8 +159,7 @@ object Restore {
                     AppLog.put("恢复阅读界面出错\n${e.localizedMessage}", e)
                 }
                 try {
-                    val file =
-                        FileUtils.createFileIfNotExist("$path${File.separator}${ReadBookConfig.shareConfigFileName}")
+                    val file = File(path, ReadBookConfig.shareConfigFileName)
                     if (file.exists()) {
                         FileUtils.delete(ReadBookConfig.shareConfigFilePath)
                         file.copyTo(File(ReadBookConfig.shareConfigFilePath))
@@ -165,7 +169,7 @@ object Restore {
                     AppLog.put("恢复阅读界面出错\n${e.localizedMessage}", e)
                 }
             }
-            Preferences.getSharedPreferences(appCtx, path, "config")?.all?.let { map ->
+            appCtx.getSharedPreferences(path, "config")?.all?.let { map ->
                 val edit = appCtx.defaultSharedPreferences.edit()
                 map.forEach { (key, value) ->
                     if (BackupConfig.keyIsNotIgnore(key)) {
@@ -200,9 +204,11 @@ object Restore {
 
     private inline fun <reified T> fileToListT(path: String, fileName: String): List<T>? {
         try {
-            val file = FileUtils.createFileIfNotExist(path + File.separator + fileName)
-            FileInputStream(file).use {
-                return GSON.fromJsonArray<T>(it).getOrThrow()
+            val file = File(path, fileName)
+            if (file.exists()) {
+                FileInputStream(file).use {
+                    return GSON.fromJsonArray<T>(it).getOrThrow()
+                }
             }
         } catch (e: Exception) {
             AppLog.put("$fileName\n读取解析出错\n${e.localizedMessage}", e)

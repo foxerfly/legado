@@ -2,13 +2,14 @@ package io.legado.app.ui.document
 
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.webkit.MimeTypeMap
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
+import io.legado.app.constant.AppConst
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.Theme
 import io.legado.app.databinding.ActivityTranslucenceBinding
 import io.legado.app.help.IntentData
@@ -89,6 +90,7 @@ class HandleFileActivity :
                     HandleFileContract.DIR -> kotlin.runCatching {
                         selectDocTree.launch()
                     }.onFailure {
+                        AppLog.put(getString(R.string.open_sys_dir_picker_error), it)
                         toastOnUi(R.string.open_sys_dir_picker_error)
                         checkPermissions {
                             FilePickerDialog.show(
@@ -100,6 +102,7 @@ class HandleFileActivity :
                     HandleFileContract.FILE -> kotlin.runCatching {
                         selectDoc.launch(typesOfExtensions(allowExtensions))
                     }.onFailure {
+                        AppLog.put(getString(R.string.open_sys_dir_picker_error), it)
                         toastOnUi(R.string.open_sys_dir_picker_error)
                         FilePickerDialog.show(
                             supportFragmentManager,
@@ -157,7 +160,7 @@ class HandleFileActivity :
     }
 
     private fun getDirActions(onlySys: Boolean = false): ArrayList<SelectItem<Int>> {
-        return if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q || onlySys) {
+        return if (onlySys || (AppConst.isPlayChannel && Permissions.isManageExternalStorage())) {
             arrayListOf(SelectItem(getString(R.string.sys_folder_picker), HandleFileContract.DIR))
         } else {
             arrayListOf(
@@ -168,22 +171,28 @@ class HandleFileActivity :
     }
 
     private fun getFileActions(): ArrayList<SelectItem<Int>> {
-        return if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
+        return if (AppConst.isPlayChannel && Permissions.isManageExternalStorage()) {
+            arrayListOf(SelectItem(getString(R.string.sys_file_picker), HandleFileContract.FILE))
+        } else {
             arrayListOf(
                 SelectItem(getString(R.string.sys_file_picker), HandleFileContract.FILE),
                 SelectItem(getString(R.string.app_file_picker), 11)
             )
-        } else {
-            arrayListOf(SelectItem(getString(R.string.sys_file_picker), HandleFileContract.FILE))
         }
     }
 
     private fun checkPermissions(success: (() -> Unit)? = null) {
-        PermissionsCompat.Builder(this)
+        PermissionsCompat.Builder()
             .addPermissions(*Permissions.Group.STORAGE)
             .rationale(R.string.tip_perm_request_storage)
             .onGranted {
                 success?.invoke()
+            }
+            .onDenied {
+                finish()
+            }
+            .onError {
+                finish()
             }
             .request()
     }

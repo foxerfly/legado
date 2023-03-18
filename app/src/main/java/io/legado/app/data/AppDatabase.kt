@@ -20,13 +20,13 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 52,
+    version = 62,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
         RssSource::class, Bookmark::class, RssArticle::class, RssReadRecord::class,
         RssStar::class, TxtTocRule::class, ReadRecord::class, HttpTTS::class, Cache::class,
-        RuleSub::class, KeyboardAssist::class],
+        RuleSub::class, DictRule::class, KeyboardAssist::class, Server::class],
     autoMigrations = [
         AutoMigration(from = 43, to = 44),
         AutoMigration(from = 44, to = 45),
@@ -36,7 +36,17 @@ val appDb by lazy {
         AutoMigration(from = 48, to = 49),
         AutoMigration(from = 49, to = 50),
         AutoMigration(from = 50, to = 51),
-        AutoMigration(from = 51, to = 52)
+        AutoMigration(from = 51, to = 52),
+        AutoMigration(from = 52, to = 53),
+        AutoMigration(from = 53, to = 54),
+        AutoMigration(from = 54, to = 55, spec = DatabaseMigrations.Migration_54_55::class),
+        AutoMigration(from = 55, to = 56),
+        AutoMigration(from = 56, to = 57),
+        AutoMigration(from = 57, to = 58),
+        AutoMigration(from = 58, to = 59),
+        AutoMigration(from = 59, to = 60),
+        AutoMigration(from = 60, to = 61),
+        AutoMigration(from = 61, to = 62)
     ]
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -58,7 +68,9 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val httpTTSDao: HttpTTSDao
     abstract val cacheDao: CacheDao
     abstract val ruleSubDao: RuleSubDao
+    abstract val dictRuleDao: DictRuleDao
     abstract val keyboardAssistsDao: KeyboardAssistsDao
+    abstract val serverDao: ServerDao
 
     companion object {
 
@@ -96,8 +108,18 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL(
                     """insert into book_groups(groupId, groupName, 'order', show) 
-                    select ${AppConst.bookGroupNoneId}, '未分组', -7, 1
-                    where not exists (select * from book_groups where groupId = ${AppConst.bookGroupNoneId})"""
+                    select ${AppConst.bookGroupNetNoneId}, '网络未分组', -7, 1
+                    where not exists (select * from book_groups where groupId = ${AppConst.bookGroupNetNoneId})"""
+                )
+                db.execSQL(
+                    """insert into book_groups(groupId, groupName, 'order', show) 
+                    select ${AppConst.bookGroupLocalNoneId}, '本地未分组', -6, 0
+                    where not exists (select * from book_groups where groupId = ${AppConst.bookGroupLocalNoneId})"""
+                )
+                db.execSQL(
+                    """insert into book_groups(groupId, groupName, 'order', show) 
+                    select ${AppConst.bookGroupErrorId}, '更新失败', -1, 1
+                    where not exists (select * from book_groups where groupId = ${AppConst.bookGroupErrorId})"""
                 )
                 db.execSQL("update book_sources set loginUi = null where loginUi = 'null'")
                 db.execSQL("update rssSources set loginUi = null where loginUi = 'null'")

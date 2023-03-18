@@ -7,6 +7,7 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.RuleComplete
+import io.legado.app.help.config.SourceConfig
 import io.legado.app.help.http.CookieStore
 import io.legado.app.help.http.newCallStrResponse
 import io.legado.app.help.http.okHttpClient
@@ -17,7 +18,6 @@ import kotlinx.coroutines.Dispatchers
 class BookSourceEditViewModel(application: Application) : BaseViewModel(application) {
     var autoComplete = false
     var bookSource: BookSource? = null
-    private var oldSourceUrl: String? = null
 
     fun initData(intent: Intent, onFinally: () -> Unit) {
         execute {
@@ -27,7 +27,6 @@ class BookSourceEditViewModel(application: Application) : BaseViewModel(applicat
                 source = appDb.bookSourceDao.getBookSource(sourceUrl)
             }
             source?.let {
-                oldSourceUrl = it.bookSourceUrl
                 bookSource = it
             }
         }.onFinally {
@@ -37,12 +36,10 @@ class BookSourceEditViewModel(application: Application) : BaseViewModel(applicat
 
     fun save(source: BookSource, success: (() -> Unit)? = null) {
         execute {
-            oldSourceUrl?.let {
-                if (oldSourceUrl != source.bookSourceUrl) {
-                    appDb.bookSourceDao.delete(it)
-                }
+            bookSource?.let {
+                appDb.bookSourceDao.delete(it)
+                SourceConfig.removeSource(it.bookSourceUrl)
             }
-            oldSourceUrl = source.bookSourceUrl
             source.lastUpdateTime = System.currentTimeMillis()
             appDb.bookSourceDao.insert(source)
             bookSource = source

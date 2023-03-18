@@ -3,12 +3,13 @@ package io.legado.app.help
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
+import android.webkit.WebSettings
 import io.legado.app.constant.AppConst
 import io.legado.app.model.ReadAloud
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.getFile
 import io.legado.app.utils.longToastOnUi
-import io.legado.app.utils.msg
+import io.legado.app.utils.stackTraceStr
 import splitties.init.appCtx
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -48,7 +49,7 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
         if (ex == null) return
         //保存日志文件
         saveCrashInfo2File(ex)
-        context.longToastOnUi(ex.msg)
+        context.longToastOnUi(ex.stackTraceStr)
         Thread.sleep(3000)
     }
 
@@ -62,6 +63,10 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
                 //获取系统信息
                 map["MANUFACTURER"] = Build.MANUFACTURER
                 map["BRAND"] = Build.BRAND
+                map["MODEL"] = Build.MODEL
+                map["SDK_INT"] = Build.VERSION.SDK_INT.toString()
+                map["RELEASE"] = Build.VERSION.RELEASE
+                map["WebViewUserAgent"] = WebSettings.getDefaultUserAgent(appCtx)
                 //获取app版本信息
                 AppConst.appInfo.let {
                     map["versionName"] = it.versionName

@@ -36,6 +36,9 @@ object LocalConfig :
     val bookSourcesHelpVersionIsLast: Boolean
         get() = isLastVersion(1, "bookSourceHelpVersion", "firstOpenBookSources")
 
+    val webDavBookHelpVersionIsLast: Boolean
+        get() = isLastVersion(1, "webDavBookHelpVersion", "firstOpenWebDavBook")
+
     val ruleHelpVersionIsLast: Boolean
         get() = isLastVersion(1, "ruleHelpVersion")
 
@@ -43,10 +46,13 @@ object LocalConfig :
         get() = !isLastVersion(5, "httpTtsVersion")
 
     val needUpTxtTocRule: Boolean
-        get() = !isLastVersion(1, "txtTocRuleVersion")
+        get() = !isLastVersion(2, "txtTocRuleVersion")
 
     val needUpRssSources: Boolean
         get() = !isLastVersion(4, "rssSourceVersion")
+
+    val needUpDictRule: Boolean
+        get() = !isLastVersion(1, "needUpDictRule")
 
     var versionCode
         get() = getLong(versionCodeKey, 0)
@@ -81,5 +87,18 @@ object LocalConfig :
         }
         return true
     }
+
+    var bookInfoDeleteAlert: Boolean
+        get() = getBoolean("bookInfoDeleteAlert", true)
+        set(value) {
+            putBoolean("bookInfoDeleteAlert", value)
+        }
+
+    var deleteBookOriginal: Boolean
+        get() = getBoolean("deleteBookOriginal")
+        set(value) {
+            putBoolean("deleteBookOriginal", value)
+        }
+
 
 }

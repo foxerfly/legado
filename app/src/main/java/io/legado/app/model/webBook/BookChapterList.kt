@@ -8,17 +8,17 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.rule.TocRule
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.exception.TocEmptyException
-import io.legado.app.help.ContentProcessor
+import io.legado.app.help.book.ContentProcessor
 import io.legado.app.model.Debug
 import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.utils.isTrue
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.async
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import splitties.init.appCtx
+import kotlin.coroutines.coroutineContext
 
 /**
  * 获取目录
@@ -26,7 +26,6 @@ import splitties.init.appCtx
 object BookChapterList {
 
     suspend fun analyzeChapterList(
-        scope: CoroutineScope,
         bookSource: BookSource,
         book: Book,
         baseUrl: String,
@@ -52,7 +51,7 @@ object BookChapterList {
         }
         var chapterData =
             analyzeChapterList(
-                scope, book, baseUrl, redirectUrl, body,
+                book, baseUrl, redirectUrl, body,
                 tocRule, listRule, bookSource, log = true
             )
         chapterList.addAll(chapterData.first)
@@ -62,14 +61,15 @@ object BookChapterList {
                 var nextUrl = chapterData.second[0]
                 while (nextUrl.isNotEmpty() && !nextUrlList.contains(nextUrl)) {
                     nextUrlList.add(nextUrl)
-                    AnalyzeUrl(
+                    val res = AnalyzeUrl(
                         mUrl = nextUrl,
                         source = bookSource,
                         ruleData = book,
                         headerMapF = bookSource.getHeaderMap()
-                    ).getStrResponseAwait().body?.let { nextBody ->
+                    ).getStrResponseAwait() //控制并发访问
+                    res.body?.let { nextBody ->
                         chapterData = analyzeChapterList(
-                            scope, book, nextUrl, nextUrl,
+                            book, nextUrl, nextUrl,
                             nextBody, tocRule, listRule, bookSource
                         )
                         nextUrl = chapterData.second.firstOrNull() ?: ""
@@ -84,15 +84,14 @@ object BookChapterList {
                     val asyncArray = Array(chapterData.second.size) {
                         async(IO) {
                             val urlStr = chapterData.second[it]
-                            val analyzeUrl = AnalyzeUrl(
+                            val res = AnalyzeUrl(
                                 mUrl = urlStr,
                                 source = bookSource,
                                 ruleData = book,
                                 headerMapF = bookSource.getHeaderMap()
-                            )
-                            val res = analyzeUrl.getStrResponseAwait()
+                            ).getStrResponseAwait() //控制并发访问
                             analyzeChapterList(
-                                this, book, urlStr, res.url,
+                                book, urlStr, res.url,
                                 res.body!!, tocRule, listRule, bookSource, false
                             ).first
                         }
@@ -110,14 +109,14 @@ object BookChapterList {
         if (!reverse) {
             chapterList.reverse()
         }
-        scope.ensureActive()
+        coroutineContext.ensureActive()
         val lh = LinkedHashSet(chapterList)
         val list = ArrayList(lh)
         if (!book.getReverseToc()) {
             list.reverse()
         }
         Debug.log(book.origin, "◇目录总数:${list.size}")
-        scope.ensureActive()
+        coroutineContext.ensureActive()
         list.forEachIndexed { index, bookChapter ->
             bookChapter.index = index
         }
@@ -131,12 +130,11 @@ object BookChapterList {
         }
         book.lastCheckTime = System.currentTimeMillis()
         book.totalChapterNum = list.size
-        scope.ensureActive()
+        coroutineContext.ensureActive()
         return list
     }
 
-    private fun analyzeChapterList(
-        scope: CoroutineScope,
+    private suspend fun analyzeChapterList(
         book: Book,
         baseUrl: String,
         redirectUrl: String,
@@ -173,7 +171,7 @@ object BookChapterList {
                 log
             )
         }
-        scope.ensureActive()
+        coroutineContext.ensureActive()
         if (elements.isNotEmpty()) {
             Debug.log(bookSource.bookSourceUrl, "┌解析目录列表", log)
             val nameRule = analyzeRule.splitSourceRule(tocRule.chapterName)
@@ -183,7 +181,7 @@ object BookChapterList {
             val upTimeRule = analyzeRule.splitSourceRule(tocRule.updateTime)
             val isVolumeRule = analyzeRule.splitSourceRule(tocRule.isVolume)
             elements.forEachIndexed { index, item ->
-                scope.ensureActive()
+                coroutineContext.ensureActive()
                 analyzeRule.setContent(item)
                 val bookChapter = BookChapter(bookUrl = book.bookUrl, baseUrl = redirectUrl)
                 analyzeRule.chapter = bookChapter
@@ -217,12 +215,16 @@ object BookChapterList {
                 }
             }
             Debug.log(bookSource.bookSourceUrl, "└目录列表解析完成", log)
-            Debug.log(bookSource.bookSourceUrl, "≡首章信息", log)
-            Debug.log(bookSource.bookSourceUrl, "◇章节名称:${chapterList[0].title}", log)
-            Debug.log(bookSource.bookSourceUrl, "◇章节链接:${chapterList[0].url}", log)
-            Debug.log(bookSource.bookSourceUrl, "◇章节信息:${chapterList[0].tag}", log)
-            Debug.log(bookSource.bookSourceUrl, "◇是否VIP:${chapterList[0].isVip}", log)
-            Debug.log(bookSource.bookSourceUrl, "◇是否购买:${chapterList[0].isPay}", log)
+            if (chapterList.isEmpty()) {
+                Debug.log(bookSource.bookSourceUrl, "◇章节列表为空", log)
+            } else {
+                Debug.log(bookSource.bookSourceUrl, "≡首章信息", log)
+                Debug.log(bookSource.bookSourceUrl, "◇章节名称:${chapterList[0].title}", log)
+                Debug.log(bookSource.bookSourceUrl, "◇章节链接:${chapterList[0].url}", log)
+                Debug.log(bookSource.bookSourceUrl, "◇章节信息:${chapterList[0].tag}", log)
+                Debug.log(bookSource.bookSourceUrl, "◇是否VIP:${chapterList[0].isVip}", log)
+                Debug.log(bookSource.bookSourceUrl, "◇是否购买:${chapterList[0].isPay}", log)
+            }
         }
         return Pair(chapterList, nextUrlList)
     }

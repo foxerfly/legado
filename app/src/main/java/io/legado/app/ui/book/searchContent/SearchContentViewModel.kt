@@ -7,13 +7,13 @@ import io.legado.app.base.BaseViewModel
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
-import io.legado.app.help.BookHelp
-import io.legado.app.help.ContentProcessor
+import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.config.AppConfig
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 
 class SearchContentViewModel(application: Application) : BaseViewModel(application) {
     var bookUrl: String = ""
@@ -23,7 +23,6 @@ class SearchContentViewModel(application: Application) : BaseViewModel(applicati
     var searchResultCounts = 0
     val cacheChapterNames = hashSetOf<String>()
     val searchResultList: MutableList<SearchResult> = mutableListOf()
-    var mContent: String = ""
 
     fun initBook(bookUrl: String, success: () -> Unit) {
         this.bookUrl = bookUrl
@@ -38,67 +37,49 @@ class SearchContentViewModel(application: Application) : BaseViewModel(applicati
     }
 
     suspend fun searchChapter(
-        scope: CoroutineScope,
         query: String,
         chapter: BookChapter?
     ): List<SearchResult> {
         val searchResultsWithinChapter: MutableList<SearchResult> = mutableListOf()
-        if (chapter != null) {
-            book?.let { book ->
-                val chapterContent = BookHelp.getContent(book, chapter)
-                scope.ensureActive()
-                if (chapterContent != null) {
-                    //先搜索没有启用净化的正文
-                    withContext(Dispatchers.IO) {
-                        chapter.title = when (AppConfig.chineseConverterType) {
-                            1 -> ChineseUtils.t2s(chapter.title)
-                            2 -> ChineseUtils.s2t(chapter.title)
-                            else -> chapter.title
-                        }
-                        scope.ensureActive()
-                        mContent = contentProcessor!!.getContent(
-                            book, chapter, chapterContent,
-                            chineseConvert = true,
-                            reSegment = false,
-                            useReplace = false
-                        ).joinToString("")
-                    }
-                    val positions = searchPosition(scope, query)
-                    positions.forEachIndexed { index, position ->
-                        scope.ensureActive()
-                        val construct = getResultAndQueryIndex(mContent, position, query)
-                        val result = SearchResult(
-                            resultCountWithinChapter = index,
-                            resultText = construct.second,
-                            chapterTitle = chapter.title,
-                            query = query,
-                            chapterIndex = chapter.index,
-                            queryIndexInResult = construct.first,
-                            queryIndexInChapter = position
-                        )
-                        searchResultsWithinChapter.add(result)
-                    }
-                    searchResultCounts += searchResultsWithinChapter.size
-                }
-            }
+        chapter ?: return searchResultsWithinChapter
+        val book = book ?: return searchResultsWithinChapter
+        val chapterContent = BookHelp.getContent(book, chapter) ?: return searchResultsWithinChapter
+        coroutineContext.ensureActive()
+        chapter.title = when (AppConfig.chineseConverterType) {
+            1 -> ChineseUtils.t2s(chapter.title)
+            2 -> ChineseUtils.s2t(chapter.title)
+            else -> chapter.title
         }
+        coroutineContext.ensureActive()
+        val mContent = contentProcessor!!.getContent(
+            book, chapter, chapterContent
+        ).toString()
+        val positions = searchPosition(mContent, query)
+        positions.forEachIndexed { index, position ->
+            coroutineContext.ensureActive()
+            val construct = getResultAndQueryIndex(mContent, position, query)
+            val result = SearchResult(
+                resultCountWithinChapter = index,
+                resultText = construct.second,
+                chapterTitle = chapter.title,
+                query = query,
+                chapterIndex = chapter.index,
+                queryIndexInResult = construct.first,
+                queryIndexInChapter = position
+            )
+            searchResultsWithinChapter.add(result)
+        }
+        searchResultCounts += searchResultsWithinChapter.size
         return searchResultsWithinChapter
     }
 
-    private suspend fun searchPosition(scope: CoroutineScope, pattern: String): List<Int> {
+    private suspend fun searchPosition(content: String, pattern: String): List<Int> {
         val position: MutableList<Int> = mutableListOf()
-        var index = mContent.indexOf(pattern)
-        if (index >= 0) {
-            //搜索到内容允许净化
-            if (book!!.getUseReplaceRule()) {
-                mContent = contentProcessor!!.replaceContent(mContent)
-                index = mContent.indexOf(pattern)
-            }
-            while (index >= 0) {
-                scope.ensureActive()
-                position.add(index)
-                index = mContent.indexOf(pattern, index + pattern.length)
-            }
+        var index = content.indexOf(pattern)
+        while (index >= 0) {
+            coroutineContext.ensureActive()
+            position.add(index)
+            index = content.indexOf(pattern, index + pattern.length)
         }
         return position
     }
@@ -109,9 +90,9 @@ class SearchContentViewModel(application: Application) : BaseViewModel(applicati
         query: String
     ): Pair<Int, String> {
         // 左右移动20个字符，构建关键词周边文字，在搜索结果里显示
-        // todo: 判断段落，只在关键词所在段落内分割
-        // todo: 利用标点符号分割完整的句
-        // todo: length和设置结合，自由调整周边文字长度
+        // 判断段落，只在关键词所在段落内分割
+        // 利用标点符号分割完整的句
+        // length和设置结合，自由调整周边文字长度
         val length = 20
         var po1 = queryIndexInContent - length
         var po2 = queryIndexInContent + query.length + length

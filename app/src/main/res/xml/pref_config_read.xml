@@ -50,6 +50,15 @@
         app:iconSpaceReserved="false"
         app:isBottomBackground="true" />
 
+    <io.legado.app.lib.prefs.NameListPreference
+        android:defaultValue="page"
+        android:entries="@array/progress_bar_behavior_title"
+        android:entryValues="@array/progress_bar_behavior_value"
+        android:key="progressBarBehavior"
+        android:title="@string/progress_bar_behavior"
+        app:iconSpaceReserved="false"
+        app:isBottomBackground="true" />
+
     <io.legado.app.lib.prefs.SwitchPreference
         android:defaultValue="false"
         android:key="useZhLayout"
@@ -92,6 +101,13 @@
         app:iconSpaceReserved="false"
         app:isBottomBackground="true" />
 
+    <io.legado.app.lib.prefs.Preference
+        android:key="pageTouchSlop"
+        android:summary="@string/page_touch_slop_summary"
+        android:title="@string/page_touch_slop_title"
+        app:iconSpaceReserved="false"
+        app:isBottomBackground="true" />
+
     <io.legado.app.lib.prefs.SwitchPreference
         android:defaultValue="true"
         android:key="autoChangeSource"
@@ -110,6 +126,20 @@
         android:defaultValue="true"
         android:key="showBrightnessView"
         android:title="@string/show_brightness_view"
+        app:iconSpaceReserved="false"
+        app:isBottomBackground="true" />
+
+    <io.legado.app.lib.prefs.SwitchPreference
+        android:defaultValue="false"
+        android:key="asyncLoadImage"
+        android:title="@string/async_load_image"
+        app:iconSpaceReserved="false"
+        app:isBottomBackground="true" />
+
+    <io.legado.app.lib.prefs.SwitchPreference
+        android:defaultValue="false"
+        android:key="noAnimScrollPage"
+        android:title="@string/no_anim_scroll_page"
         app:iconSpaceReserved="false"
         app:isBottomBackground="true" />
 
@@ -139,4 +169,13 @@
         app:iconSpaceReserved="false"
         app:isBottomBackground="true" />
 
+    <io.legado.app.lib.prefs.SwitchPreference
+        android:defaultValue="true"
+        android:key="showReadTitleAddition"
+        android:title="@string/show_read_title_addition"/>
+
+    <io.legado.app.lib.prefs.SwitchPreference
+        android:defaultValue="false"
+        android:key="readBarStyleFollowPage"
+        android:title="@string/read_bar_style_follow_page"/>
 </androidx.preference.PreferenceScreen>

@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.MutableLiveData
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
+import io.legado.app.constant.AppConst
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.http.newCallResponseBody
@@ -67,12 +68,12 @@ class ImportThemeViewModel(app: Application) : BaseViewModel(app) {
     private suspend fun importSourceAwait(text: String) {
         when {
             text.isJsonObject() -> {
-                GSON.fromJsonObject<ThemeConfig.Config>(text).getOrThrow()?.let {
+                GSON.fromJsonObject<ThemeConfig.Config>(text).getOrThrow().let {
                     allSources.add(it)
                 }
             }
             text.isJsonArray() -> GSON.fromJsonArray<ThemeConfig.Config>(text).getOrThrow()
-                ?.let { items ->
+                .let { items ->
                     allSources.addAll(items)
                 }
             text.isAbsUrl() -> {
@@ -84,7 +85,12 @@ class ImportThemeViewModel(app: Application) : BaseViewModel(app) {
 
     private suspend fun importSourceUrl(url: String) {
         okHttpClient.newCallResponseBody {
-            url(url)
+            if (url.endsWith("#requestWithoutUA")) {
+                url(url.substringBeforeLast("#requestWithoutUA"))
+                header(AppConst.UA_NAME, "null")
+            } else {
+                url(url)
+            }
         }.text().let {
             importSourceAwait(it)
         }

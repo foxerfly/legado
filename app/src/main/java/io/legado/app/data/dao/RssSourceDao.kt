@@ -1,8 +1,12 @@
 package io.legado.app.data.dao
 
 import androidx.room.*
+import io.legado.app.constant.AppPattern
 import io.legado.app.data.entities.RssSource
+import io.legado.app.utils.cnCompare
+import io.legado.app.utils.splitNotBlank
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 @Dao
 interface RssSourceDao {
@@ -13,7 +17,7 @@ interface RssSourceDao {
     @Query("select * from rssSources where sourceUrl in (:sourceUrls)")
     fun getRssSources(vararg sourceUrls: String): List<RssSource>
 
-    @get:Query("SELECT * FROM rssSources")
+    @get:Query("SELECT * FROM rssSources order by customOrder")
     val all: List<RssSource>
 
     @get:Query("select count(sourceUrl) from rssSources")
@@ -44,6 +48,15 @@ interface RssSourceDao {
     @Query("SELECT * FROM rssSources where enabled = 1 order by customOrder")
     fun flowEnabled(): Flow<List<RssSource>>
 
+    @Query("SELECT * FROM rssSources where enabled = 0 order by customOrder")
+    fun flowDisabled(): Flow<List<RssSource>>
+
+    @Query("select * from rssSources where loginUrl is not null and loginUrl != ''")
+    fun flowLogin(): Flow<List<RssSource>>
+
+    @Query("select * from rssSources where sourceGroup is null or sourceGroup = '' or sourceGroup like '%未分组%'")
+    fun flowNoGroup(): Flow<List<RssSource>>
+
     @Query(
         """SELECT * FROM rssSources 
         where enabled = 1 
@@ -65,10 +78,13 @@ interface RssSourceDao {
     fun flowEnabledByGroup(searchKey: String): Flow<List<RssSource>>
 
     @Query("select distinct sourceGroup from rssSources where trim(sourceGroup) <> ''")
-    fun flowGroup(): Flow<List<String>>
+    fun flowGroupsUnProcessed(): Flow<List<String>>
+
+    @Query("select distinct sourceGroup from rssSources where trim(sourceGroup) <> '' and enabled = 1")
+    fun flowGroupEnabled(): Flow<List<String>>
 
     @get:Query("select distinct sourceGroup from rssSources where trim(sourceGroup) <> ''")
-    val allGroup: List<String>
+    val allGroupsUnProcessed: List<String>
 
     @get:Query("select min(customOrder) from rssSources")
     val minOrder: Int
@@ -96,4 +112,27 @@ interface RssSourceDao {
 
     @Query("select 1 from rssSources where sourceUrl = :key")
     fun has(key: String): Boolean?
+
+    private fun dealGroups(list: List<String>): List<String> {
+        val groups = linkedSetOf<String>()
+        list.forEach {
+            it.splitNotBlank(AppPattern.splitGroupRegex).forEach { group ->
+                groups.add(group)
+            }
+        }
+        return groups.sortedWith { o1, o2 ->
+            o1.cnCompare(o2)
+        }
+    }
+
+    val allGroups: List<String>
+        get() {
+            return dealGroups(allGroupsUnProcessed)
+        }
+
+    fun flowGroups(): Flow<List<String>> {
+        return flowGroupsUnProcessed().map { list ->
+            dealGroups(list)
+        }
+    }
 }

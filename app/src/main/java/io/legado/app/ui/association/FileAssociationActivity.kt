@@ -1,11 +1,13 @@
 package io.legado.app.ui.association
 
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.viewModels
 import androidx.documentfile.provider.DocumentFile
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
+import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
 import io.legado.app.databinding.ActivityTranslucenceBinding
 import io.legado.app.help.config.AppConfig
@@ -33,7 +35,8 @@ class FileAssociationActivity :
                 AppConfig.defaultBookTreeUri = treeUri.toString()
                 importBook(treeUri, uri)
             } ?: let {
-                toastOnUi("不选择文件夹重启应用后可能没有权限访问")
+                val storageHelp = String(assets.open("storageHelp.md").readBytes())
+                toastOnUi(storageHelp)
                 viewModel.importBook(uri)
             }
         }
@@ -44,7 +47,7 @@ class FileAssociationActivity :
     override val viewModel by viewModels<FileAssociationViewModel>()
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.rotateLoading.show()
+        binding.rotateLoading.visible()
         viewModel.importBookLiveData.observe(this) { uri ->
             importBook(uri)
         }
@@ -77,19 +80,19 @@ class FileAssociationActivity :
             }
         }
         viewModel.errorLive.observe(this) {
-            binding.rotateLoading.hide()
+            binding.rotateLoading.gone()
             toastOnUi(it)
             finish()
         }
         viewModel.openBookLiveData.observe(this) {
-            binding.rotateLoading.hide()
+            binding.rotateLoading.gone()
             startActivity<ReadBookActivity> {
                 putExtra("bookUrl", it)
             }
             finish()
         }
         viewModel.notSupportedLiveData.observe(this) { data ->
-            binding.rotateLoading.hide()
+            binding.rotateLoading.gone()
             alert(
                 title = appCtx.getString(R.string.draw),
                 message = appCtx.getString(R.string.file_not_supported, data.second)
@@ -103,15 +106,19 @@ class FileAssociationActivity :
             }
         }
         intent.data?.let { data ->
-            if (!data.isContentScheme()) {
-                PermissionsCompat.Builder(this)
+            if (data.isContentScheme()) {
+                viewModel.dispatchIndent(data)
+            } else if (!AppConst.isPlayChannel || Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
+                PermissionsCompat.Builder()
                     .addPermissions(*Permissions.Group.STORAGE)
                     .rationale(R.string.tip_perm_request_storage)
                     .onGranted {
                         viewModel.dispatchIndent(data)
+                    }.onDenied {
+                        toastOnUi("请求存储权限失败。")
                     }.request()
             } else {
-                viewModel.dispatchIndent(data)
+                toastOnUi("由于安卓系统限制，请使用系统文件管理重新打开。")
             }
         }
     }
@@ -121,7 +128,7 @@ class FileAssociationActivity :
             val treeUriStr = AppConfig.defaultBookTreeUri
             if (treeUriStr.isNullOrEmpty()) {
                 localBookTreeSelect.launch {
-                    title = "选择保存书籍的文件夹"
+                    title = getString(R.string.select_book_folder)
                     mode = HandleFileContract.DIR_SYS
                 }
             } else {
@@ -145,7 +152,7 @@ class FileAssociationActivity :
                             if (doc == null || fileDoc.lastModified > doc.lastModified()) {
                                 if (doc == null) {
                                     doc = treeDoc.createFile(FileUtils.getMimeType(name), name)
-                                        ?: throw SecurityException("Permission Denial")
+                                        ?: throw SecurityException("请重新设置书籍保存位置\nPermission Denial")
                                 }
                                 contentResolver.openOutputStream(doc.uri)!!.use { oStream ->
                                     inputStream.copyTo(oStream)
@@ -172,7 +179,7 @@ class FileAssociationActivity :
             }.onFailure {
                 when (it) {
                     is SecurityException -> localBookTreeSelect.launch {
-                        title = "选择保存书籍的文件夹"
+                        title = getString(R.string.select_book_folder)
                         mode = HandleFileContract.DIR_SYS
                     }
                     else -> {

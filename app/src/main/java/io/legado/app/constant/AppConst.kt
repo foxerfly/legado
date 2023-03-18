@@ -3,8 +3,10 @@ package io.legado.app.constant
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.provider.Settings
-import com.script.javascript.RhinoScriptEngine
+import androidx.annotation.Keep
+import com.script.rhino.RhinoScriptEngine
 import io.legado.app.BuildConfig
+import io.legado.app.utils.channel
 import splitties.init.appCtx
 import java.text.SimpleDateFormat
 
@@ -13,6 +15,8 @@ object AppConst {
 
     const val APP_TAG = "Legado"
 
+    val isPlayChannel = appCtx.channel == "google"
+
     const val channelIdDownload = "channel_download"
     const val channelIdReadAloud = "channel_read_aloud"
     const val channelIdWeb = "channel_web"
@@ -20,6 +24,8 @@ object AppConst {
     const val UA_NAME = "User-Agent"
 
     const val MAX_THREAD = 9
+
+    const val DEFAULT_WEBDAV_ID = -1L
 
     val SCRIPT_ENGINE: RhinoScriptEngine by lazy {
         RhinoScriptEngine()
@@ -41,7 +47,9 @@ object AppConst {
     const val bookGroupAllId = -1L
     const val bookGroupLocalId = -2L
     const val bookGroupAudioId = -3L
-    const val bookGroupNoneId = -4L
+    const val bookGroupNetNoneId = -4L
+    const val bookGroupLocalNoneId = -5L
+    const val bookGroupErrorId = -11L
 
     const val notificationIdRead = -1122391
     const val notificationIdAudio = -1122392
@@ -68,6 +76,7 @@ object AppConst {
 
     val appInfo: AppInfo by lazy {
         val appInfo = AppInfo()
+        @Suppress("DEPRECATION")
         appCtx.packageManager.getPackageInfo(appCtx.packageName, PackageManager.GET_ACTIVITIES)
             ?.let {
                 appInfo.versionName = it.versionName
@@ -84,6 +93,7 @@ object AppConst {
     val charsets =
         arrayListOf("UTF-8", "GB2312", "GB18030", "GBK", "Unicode", "UTF-16", "UTF-16LE", "ASCII")
 
+    @Keep
     data class AppInfo(
         var versionCode: Long = 0L,
         var versionName: String = ""

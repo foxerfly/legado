@@ -8,8 +8,8 @@ import io.legado.app.data.entities.RssSource
 import io.legado.app.help.RuleComplete
 import io.legado.app.help.http.CookieStore
 import io.legado.app.utils.getClipText
-import io.legado.app.utils.msg
 import io.legado.app.utils.printOnDebug
+import io.legado.app.utils.stackTraceStr
 
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
@@ -17,8 +17,7 @@ import kotlinx.coroutines.Dispatchers
 
 class RssSourceEditViewModel(application: Application) : BaseViewModel(application) {
     var autoComplete = false
-    var rssSource: RssSource = RssSource()
-    private var oldSourceUrl: String = ""
+    var rssSource: RssSource? = null
 
     fun initData(intent: Intent, onFinally: () -> Unit) {
         execute {
@@ -28,7 +27,6 @@ class RssSourceEditViewModel(application: Application) : BaseViewModel(applicati
                     rssSource = it
                 }
             }
-            oldSourceUrl = rssSource.sourceUrl
         }.onFinally {
             onFinally()
         }
@@ -36,11 +34,11 @@ class RssSourceEditViewModel(application: Application) : BaseViewModel(applicati
 
     fun save(source: RssSource, success: (() -> Unit)) {
         execute {
-            if (oldSourceUrl != source.sourceUrl) {
-                appDb.rssSourceDao.delete(oldSourceUrl)
-                oldSourceUrl = source.sourceUrl
+            rssSource?.let {
+                appDb.rssSourceDao.delete(it)
             }
             appDb.rssSourceDao.insert(source)
+            rssSource = source
         }.onSuccess {
             success()
         }.onError {
@@ -74,7 +72,7 @@ class RssSourceEditViewModel(application: Application) : BaseViewModel(applicati
                 finally.invoke(it)
             }
         }.onError {
-            context.toastOnUi(it.msg)
+            context.toastOnUi(it.stackTraceStr)
         }
     }
 

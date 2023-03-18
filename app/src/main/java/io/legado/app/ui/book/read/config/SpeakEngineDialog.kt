@@ -54,9 +54,7 @@ class SpeakEngineDialog(val callBack: CallBack) : BaseDialogFragment(R.layout.di
         it.uri?.let { uri ->
             alert(R.string.export_success) {
                 if (uri.toString().isAbsUrl()) {
-                    DirectLinkUpload.getSummary()?.let { summary ->
-                        setMessage(summary)
-                    }
+                    setMessage(DirectLinkUpload.getSummary())
                 }
                 val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
                     editView.hint = getString(R.string.path)
@@ -152,7 +150,7 @@ class SpeakEngineDialog(val callBack: CallBack) : BaseDialogFragment(R.layout.di
             R.id.menu_import_onLine -> importAlert()
             R.id.menu_export -> exportDirResult.launch {
                 mode = HandleFileContract.EXPORT
-                fileData = Triple(
+                fileData = HandleFileContract.FileData(
                     "httpTts.json",
                     GSON.toJson(adapter.getItems()).toByteArray(),
                     "application/json"

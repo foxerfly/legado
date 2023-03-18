@@ -4,11 +4,12 @@ import android.os.Parcelable
 import android.text.TextUtils
 import androidx.room.*
 import io.legado.app.constant.AppPattern
-import io.legado.app.constant.BookType
+import io.legado.app.constant.BookSourceType
 import io.legado.app.data.entities.rule.*
-import io.legado.app.help.SourceAnalyzer
-import io.legado.app.utils.*
-import kotlinx.parcelize.IgnoredOnParcel
+import io.legado.app.help.source.SourceAnalyzer
+import io.legado.app.utils.GSON
+import io.legado.app.utils.fromJsonObject
+import io.legado.app.utils.splitNotBlank
 import kotlinx.parcelize.Parcelize
 import java.io.InputStream
 
@@ -28,7 +29,7 @@ data class BookSource(
     // 分组
     var bookSourceGroup: String? = null,
     // 类型，0 文本，1 音频, 2 图片, 3 文件（指的是类似知轩藏书只提供下载的网站）
-    @BookType.Type
+    @BookSourceType.Type
     var bookSourceType: Int = 0,
     // 详情页url正则
     var bookUrlPattern: String? = null,
@@ -38,9 +39,11 @@ data class BookSource(
     var enabled: Boolean = true,
     // 启用发现
     var enabledExplore: Boolean = true,
+    // 启用段评
+    var enabledReview: Boolean? = false,
     // 启用okhttp CookieJAr 自动保存每次请求的cookie
     @ColumnInfo(defaultValue = "0")
-    override var enabledCookieJar: Boolean? = false,
+    override var enabledCookieJar: Boolean? = true,
     // 并发率
     override var concurrentRate: String? = null,
     // 请求头
@@ -51,6 +54,8 @@ data class BookSource(
     override var loginUi: String? = null,
     // 登录检测js
     var loginCheckJs: String? = null,
+    // 封面解密js
+    var coverDecodeJs: String? = null,
     // 注释
     var bookSourceComment: String? = null,
     // 自定义变量说明
@@ -74,7 +79,9 @@ data class BookSource(
     // 目录页规则
     var ruleToc: TocRule? = null,
     // 正文页规则
-    var ruleContent: ContentRule? = null
+    var ruleContent: ContentRule? = null,
+    // 段评规则
+    var ruleReview: ReviewRule? = null
 ) : Parcelable, BaseSource {
 
     override fun getTag(): String {
@@ -83,48 +90,6 @@ data class BookSource(
 
     override fun getKey(): String {
         return bookSourceUrl
-    }
-
-    @delegate:Transient
-    @delegate:Ignore
-    @IgnoredOnParcel
-    val exploreKinds: List<ExploreKind> by lazy {
-        val exploreUrl = exploreUrl ?: return@lazy emptyList()
-        val kinds = arrayListOf<ExploreKind>()
-        var ruleStr = exploreUrl
-        if (ruleStr.isNotBlank()) {
-            kotlin.runCatching {
-                if (exploreUrl.startsWith("<js>", false)
-                    || exploreUrl.startsWith("@js:", false)
-                ) {
-                    val aCache = ACache.get("explore")
-                    ruleStr = aCache.getAsString(bookSourceUrl) ?: ""
-                    if (ruleStr.isBlank()) {
-                        val jsStr = if (exploreUrl.startsWith("@")) {
-                            exploreUrl.substring(4)
-                        } else {
-                            exploreUrl.substring(4, exploreUrl.lastIndexOf("<"))
-                        }
-                        ruleStr = evalJS(jsStr).toString().trim()
-                        aCache.put(bookSourceUrl, ruleStr)
-                    }
-                }
-                if (ruleStr.isJsonArray()) {
-                    GSON.fromJsonArray<ExploreKind>(ruleStr).getOrThrow()?.let {
-                        kinds.addAll(it)
-                    }
-                } else {
-                    ruleStr.split("(&&|\n)+".toRegex()).forEach { kindStr ->
-                        val kindCfg = kindStr.split("::")
-                        kinds.add(ExploreKind(kindCfg.first(), kindCfg.getOrNull(1)))
-                    }
-                }
-            }.onFailure {
-                kinds.add(ExploreKind("ERROR:${it.localizedMessage}", it.stackTraceToString()))
-                it.printOnDebug()
-            }
-        }
-        return@lazy kinds
     }
 
     override fun hashCode(): Int {
@@ -167,6 +132,13 @@ data class BookSource(
         ruleContent?.let { return it }
         val rule = ContentRule()
         ruleContent = rule
+        return rule
+    }
+
+    fun getReviewRule(): ReviewRule {
+        ruleReview?.let { return it }
+        val rule = ReviewRule()
+        ruleReview = rule
         return rule
     }
 
@@ -220,8 +192,8 @@ data class BookSource(
         }
     }
 
-    fun equal(source: BookSource) =
-        equal(bookSourceName, source.bookSourceName)
+    fun equal(source: BookSource): Boolean {
+        return equal(bookSourceName, source.bookSourceName)
                 && equal(bookSourceUrl, source.bookSourceUrl)
                 && equal(bookSourceGroup, source.bookSourceGroup)
                 && bookSourceType == source.bookSourceType
@@ -236,6 +208,7 @@ data class BookSource(
                 && equal(loginUrl, source.loginUrl)
                 && equal(loginUi, source.loginUi)
                 && equal(loginCheckJs, source.loginCheckJs)
+                && equal(coverDecodeJs, source.coverDecodeJs)
                 && equal(exploreUrl, source.exploreUrl)
                 && equal(searchUrl, source.searchUrl)
                 && getSearchRule() == source.getSearchRule()
@@ -243,6 +216,7 @@ data class BookSource(
                 && getBookInfoRule() == source.getBookInfoRule()
                 && getTocRule() == source.getTocRule()
                 && getContentRule() == source.getContentRule()
+    }
 
     private fun equal(a: String?, b: String?) = a == b || (a.isNullOrEmpty() && b.isNullOrEmpty())
 
@@ -302,6 +276,14 @@ data class BookSource(
         @TypeConverter
         fun stringToContentRule(json: String?) =
             GSON.fromJsonObject<ContentRule>(json).getOrNull()
+
+        @TypeConverter
+        fun stringToReviewRule(json: String?) =
+            GSON.fromJsonObject<ReviewRule>(json).getOrNull()
+
+        @TypeConverter
+        fun reviewRuleToString(reviewRule: ReviewRule?): String =
+            GSON.toJson(reviewRule)
 
     }
 }
