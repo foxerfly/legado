@@ -4,11 +4,9 @@ import android.net.Uri
 import android.util.Base64
 import androidx.documentfile.provider.DocumentFile
 import com.script.SimpleBindings
+import com.script.rhino.RhinoScriptEngine
 import io.legado.app.R
-import io.legado.app.constant.AppConst
-import io.legado.app.constant.AppPattern
-import io.legado.app.constant.AppLog
-import io.legado.app.constant.BookType
+import io.legado.app.constant.*
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BaseSource
 import io.legado.app.data.entities.Book
@@ -25,7 +23,7 @@ import io.legado.app.lib.webdav.WebDavException
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.utils.*
 import kotlinx.coroutines.runBlocking
-import org.jsoup.nodes.Entities
+import org.apache.commons.text.StringEscapeUtils
 import splitties.init.appCtx
 import java.io.*
 import java.util.regex.Pattern
@@ -58,9 +56,8 @@ object LocalBook {
                     }.firstOrNull()?.let {
                         getBookInputStream(it)
                     }
-                } else if (webDavUrl != null) {
+                } else if (webDavUrl != null && downloadRemoteBook(book)) {
                     // 下载远程链接
-                    downloadRemoteBook(book)
                     getBookInputStream(book)
                 } else {
                     null
@@ -91,12 +88,15 @@ object LocalBook {
             book.isEpub -> {
                 EpubFile.getChapterList(book)
             }
+
             book.isUmd -> {
                 UmdFile.getChapterList(book)
             }
+
             book.isPdf -> {
                 PdfFile.getChapterList(book)
             }
+
             else -> {
                 TextFile.getChapterList(book)
             }
@@ -118,12 +118,15 @@ object LocalBook {
                 book.isEpub -> {
                     EpubFile.getContent(book, chapter)
                 }
+
                 book.isUmd -> {
                     UmdFile.getContent(book, chapter)
                 }
+
                 book.isPdf -> {
                     PdfFile.getContent(book, chapter)
                 }
+
                 else -> {
                     TextFile.getContent(book, chapter)
                 }
@@ -135,11 +138,7 @@ object LocalBook {
         }
         if (book.isEpub) {
             content = content?.replace("&lt;img", "&lt; img", true) ?: return null
-            return kotlin.runCatching {
-                Entities.unescape(content)
-            }.onFailure {
-                AppLog.put("HTML实体解码失败\n${it.localizedMessage}", it)
-            }.getOrDefault(content)
+            return StringEscapeUtils.unescapeHtml4(content)
         }
         return content
     }
@@ -187,7 +186,6 @@ object LocalBook {
                 name = nameAuthor.first,
                 author = nameAuthor.second,
                 originName = fileName,
-                coverUrl = getCoverPath(bookUrl),
                 latestChapterTime = updateTime,
                 order = appDb.bookDao.minOrder - 1
             )
@@ -212,11 +210,8 @@ object LocalBook {
         val files = ArchiveUtils.deCompress(archiveFileDoc, filter = filter)
         if (files.isEmpty()) throw NoStackTraceException(appCtx.getString(R.string.unsupport_archivefile_entry))
         return files.map {
-            saveBookFile(
-                    FileInputStream(it),
-                    saveFileName ?: it.name
-            ).let {
-                importFile(it).apply {
+            saveBookFile(FileInputStream(it), saveFileName ?: it.name).let { uri ->
+                importFile(uri).apply {
                     //附加压缩包名称 以便解压文件被删后再解压
                     origin = "${BookType.localTag}::${archiveFileDoc.name}"
                     addType(BookType.archive)
@@ -226,7 +221,7 @@ object LocalBook {
         }
     }
 
-   /* 批量导入 支持自动导入压缩包的支持书籍 */
+    /* 批量导入 支持自动导入压缩包的支持书籍 */
     fun importFiles(uri: Uri): List<Book> {
         val books = mutableListOf<Book>()
         val fileDoc = FileDoc.fromUri(uri, false)
@@ -255,8 +250,8 @@ object LocalBook {
                     importFile(uri)
                 }
             }.onFailure {
-                AppLog.put("ImportFile Error:\nFile ${fileDoc.toString()}\n${it.localizedMessage}", it)
-                errorCount = errorCount + 1
+                AppLog.put("ImportFile Error:\nFile $fileDoc\n${it.localizedMessage}", it)
+                errorCount += 1
             }
         }
         if (errorCount == uris.size) throw NoStackTraceException("ImportFiles Error:\nAll input files occur error")
@@ -271,13 +266,15 @@ object LocalBook {
         var author = ""
         if (!AppConfig.bookImportFileName.isNullOrBlank()) {
             try {
+                //在用户脚本后添加捕获author、name的代码，只要脚本中author、name有值就会被捕获
+                val js =
+                    AppConfig.bookImportFileName + "\nJSON.stringify({author:author,name:name})"
                 //在脚本中定义如何分解文件名成书名、作者名
-                val jsonStr = AppConst.SCRIPT_ENGINE.eval(
-                    //在用户脚本后添加捕获author、name的代码，只要脚本中author、name有值就会被捕获
-                    AppConfig.bookImportFileName + "\nJSON.stringify({author:author,name:name})",
-                    //将文件名注入到脚本的src变量中
-                    SimpleBindings().also { it["src"] = tempFileName }
-                ).toString()
+                val jsonStr = RhinoScriptEngine.run {
+                    val bindings = SimpleBindings()
+                    bindings["src"] = tempFileName
+                    eval(js, bindings)
+                }.toString()
                 val bookMess = GSON.fromJsonObject<HashMap<String, String>>(jsonStr)
                     .getOrThrow()
                 name = bookMess["name"] ?: ""
@@ -335,6 +332,7 @@ object LocalBook {
                     Base64.DEFAULT
                 )
             )
+
             else -> throw NoStackTraceException("在线导入书籍支持http/https/DataURL")
         }
         return saveBookFile(inputStream, fileName)
@@ -389,7 +387,7 @@ object LocalBook {
     }
 
     //下载book对应的远程文件 并更新Book
-    private fun downloadRemoteBook(localBook: Book) {
+    private fun downloadRemoteBook(localBook: Book): Boolean {
         val webDavUrl = localBook.getRemoteUrl()
         if (webDavUrl.isNullOrBlank()) throw NoStackTraceException("Book file is not webDav File")
         try {
@@ -409,8 +407,8 @@ object LocalBook {
                 if (localBook.isArchive) {
                     // 压缩包
                     val archiveUri = saveBookFile(it, localBook.archiveName)
-                    val newBook = importArchiveFile(archiveUri, localBook.originName) {
-                        it.contains(localBook.originName)
+                    val newBook = importArchiveFile(archiveUri, localBook.originName) { name ->
+                        name.contains(localBook.originName)
                     }.first()
                     localBook.origin = newBook.origin
                     localBook.bookUrl = newBook.bookUrl
@@ -421,9 +419,11 @@ object LocalBook {
                     localBook.save()
                 }
             }
+            return true
         } catch (e: Exception) {
             e.printOnDebug()
             AppLog.put("自动下载webDav书籍失败", e)
+            return false
         }
     }
 

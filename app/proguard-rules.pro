@@ -146,6 +146,8 @@
 }
 
 # 保持js引擎调用的java类
+-keep class * extends io.legado.app.help.JsExtensions{*;}
+# 保持js引擎调用的java类
 -keep class **.analyzeRule.**{*;}
 # 保持web类
 -keep class **.web.**{*;}
@@ -174,8 +176,9 @@
 -dontwarn com.jeremyliao.liveeventbus.**
 -dontwarn org.commonmark.ext.gfm.**
 
--keep class com.google.gson.** { *; }
--keep class com.ke.gson.** { *; }
+-keep,allowobfuscation,allowshrinking class com.google.gson.** { *; }
+-keep,allowobfuscation,allowshrinking class com.ke.gson.** { *; }
+-keep,allowobfuscation,allowshrinking class * extends com.google.gson.reflect.TypeToken
 -keep class com.jeremyliao.liveeventbus.** { *; }
 -keep class okhttp3.**{*;}
 -keep class okio.**{*;}
@@ -211,9 +214,13 @@
 -dontwarn sun.reflect.**
 
 ## Rhino
+-keep class com.script.** { *; }
 -keep class javax.script.** { *; }
+-keep class java.lang.** { *; }
+-keep class java.util.function.** { *; }
 -keep class com.sun.script.javascript.** { *; }
--keep class org.mozilla.javascript.** { *; }
+-keep class org.mozilla.** { *; }
+-dontwarn org.mozilla.javascript.engine.RhinoScriptEngineFactory
 
 ###EPUB
 -dontwarn nl.siegmann.epublib.**
@@ -234,7 +241,7 @@
 }
 
 ## ExoPlayer 反射设置ua 保证该私有变量不被混淆
--keepclassmembers class com.google.android.exoplayer2.upstream.cache.CacheDataSource$Factory {
+-keepclassmembers class androidx.media3.datasource.cache.CacheDataSource$Factory {
     *** upstreamDataSourceFactory;
 }
 ## ExoPlayer 如果还不能播放就取消注释这个
@@ -242,6 +249,9 @@
 
 ## 对外提供api
 -keep class io.legado.app.api.ReturnData{*;}
+
+# 繁简转换
+-keep class com.github.liuyueyi.quick.transfer.** {*;}
 
 
 #-------------------Cronet------------------------------------

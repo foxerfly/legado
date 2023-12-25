@@ -13,7 +13,7 @@ import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
 import io.legado.app.base.adapter.ItemViewHolder
 import io.legado.app.base.adapter.RecyclerAdapter
-import io.legado.app.data.entities.BookSource
+import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.databinding.ItemBookSourceBinding
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.model.Debug
@@ -24,37 +24,38 @@ import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.invisible
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.visible
-import java.util.*
+import java.util.Collections
 
 
 class BookSourceAdapter(context: Context, val callBack: CallBack) :
-    RecyclerAdapter<BookSource, ItemBookSourceBinding>(context),
+    RecyclerAdapter<BookSourcePart, ItemBookSourceBinding>(context),
     ItemTouchCallback.Callback {
 
-    private val selected = linkedSetOf<BookSource>()
+    private val selected = linkedSetOf<BookSourcePart>()
+    private val finalMessageRegex = Regex("成功|失败")
 
-    val selection: List<BookSource>
+    val selection: List<BookSourcePart>
         get() {
             return getItems().filter {
                 selected.contains(it)
             }
         }
 
-    val diffItemCallback = object : DiffUtil.ItemCallback<BookSource>() {
+    val diffItemCallback = object : DiffUtil.ItemCallback<BookSourcePart>() {
 
-        override fun areItemsTheSame(oldItem: BookSource, newItem: BookSource): Boolean {
+        override fun areItemsTheSame(oldItem: BookSourcePart, newItem: BookSourcePart): Boolean {
             return oldItem.bookSourceUrl == newItem.bookSourceUrl
         }
 
-        override fun areContentsTheSame(oldItem: BookSource, newItem: BookSource): Boolean {
+        override fun areContentsTheSame(oldItem: BookSourcePart, newItem: BookSourcePart): Boolean {
             return oldItem.bookSourceName == newItem.bookSourceName
                     && oldItem.bookSourceGroup == newItem.bookSourceGroup
                     && oldItem.enabled == newItem.enabled
                     && oldItem.enabledExplore == newItem.enabledExplore
-                    && oldItem.exploreUrl == newItem.exploreUrl
+                    && oldItem.hasExploreUrl == newItem.hasExploreUrl
         }
 
-        override fun getChangePayload(oldItem: BookSource, newItem: BookSource): Any? {
+        override fun getChangePayload(oldItem: BookSourcePart, newItem: BookSourcePart): Any? {
             val payload = Bundle()
             if (oldItem.bookSourceName != newItem.bookSourceName
                 || oldItem.bookSourceGroup != newItem.bookSourceGroup
@@ -65,7 +66,7 @@ class BookSourceAdapter(context: Context, val callBack: CallBack) :
                 payload.putBoolean("enabled", newItem.enabled)
             }
             if (oldItem.enabledExplore != newItem.enabledExplore ||
-                oldItem.exploreUrl != newItem.exploreUrl
+                oldItem.hasExploreUrl != newItem.hasExploreUrl
             ) {
                 payload.putBoolean("upExplore", true)
             }
@@ -84,7 +85,7 @@ class BookSourceAdapter(context: Context, val callBack: CallBack) :
     override fun convert(
         holder: ItemViewHolder,
         binding: ItemBookSourceBinding,
-        item: BookSource,
+        item: BookSourcePart,
         payloads: MutableList<Any>
     ) {
         binding.run {
@@ -94,9 +95,7 @@ class BookSourceAdapter(context: Context, val callBack: CallBack) :
                 cbBookSource.text = item.getDisPlayNameGroup()
                 swtEnabled.isChecked = item.enabled
                 cbBookSource.isChecked = selected.contains(item)
-                ivDebugText.text = Debug.debugMessageMap[item.bookSourceUrl] ?: ""
-                ivDebugText.visibility =
-                    if (ivDebugText.text.toString().isNotBlank()) View.VISIBLE else View.GONE
+                upCheckSourceMessage(binding, item)
                 upShowExplore(ivExplore, item)
             } else {
                 payload.keySet().map {
@@ -105,21 +104,7 @@ class BookSourceAdapter(context: Context, val callBack: CallBack) :
                         "upName" -> cbBookSource.text = item.getDisPlayNameGroup()
                         "upExplore" -> upShowExplore(ivExplore, item)
                         "selected" -> cbBookSource.isChecked = selected.contains(item)
-                        "checkSourceMessage" -> {
-                            ivDebugText.text = Debug.debugMessageMap[item.bookSourceUrl] ?: ""
-                            val isEmpty = ivDebugText.text.toString().isEmpty()
-                            var isFinalMessage =
-                                ivDebugText.text.toString().contains(Regex("成功|失败"))
-                            if (!Debug.isChecking && !isFinalMessage) {
-                                Debug.updateFinalMessage(item.bookSourceUrl, "校验失败")
-                                ivDebugText.text = Debug.debugMessageMap[item.bookSourceUrl] ?: ""
-                                isFinalMessage = true
-                            }
-                            ivDebugText.visibility =
-                                if (!isEmpty) View.VISIBLE else View.GONE
-                            ivProgressBar.visibility =
-                                if (isFinalMessage || isEmpty || !Debug.isChecking) View.GONE else View.VISIBLE
-                        }
+                        "checkSourceMessage" -> upCheckSourceMessage(binding, item)
                     }
                 }
             }
@@ -132,7 +117,7 @@ class BookSourceAdapter(context: Context, val callBack: CallBack) :
                 getItem(holder.layoutPosition)?.let {
                     if (view.isPressed) {
                         it.enabled = checked
-                        callBack.update(it)
+                        callBack.enable(checked, it)
                     }
                 }
             }
@@ -167,8 +152,11 @@ class BookSourceAdapter(context: Context, val callBack: CallBack) :
         val source = getItem(position) ?: return
         val popupMenu = PopupMenu(context, view)
         popupMenu.inflate(R.menu.book_source_item)
+        popupMenu.menu.findItem(R.id.menu_top).isVisible = callBack.sort == BookSourceSort.Default
+        popupMenu.menu.findItem(R.id.menu_bottom).isVisible =
+            callBack.sort == BookSourceSort.Default
         val qyMenu = popupMenu.menu.findItem(R.id.menu_enable_explore)
-        if (source.exploreUrl.isNullOrEmpty()) {
+        if (!source.hasExploreUrl) {
             qyMenu.isVisible = false
         } else {
             if (source.enabledExplore) {
@@ -178,7 +166,7 @@ class BookSourceAdapter(context: Context, val callBack: CallBack) :
             }
         }
         val loginMenu = popupMenu.menu.findItem(R.id.menu_login)
-        loginMenu.isVisible = !source.loginUrl.isNullOrBlank()
+        loginMenu.isVisible = source.hasLoginUrl
         popupMenu.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.menu_top -> callBack.toTop(source)
@@ -187,14 +175,16 @@ class BookSourceAdapter(context: Context, val callBack: CallBack) :
                     putExtra("type", "bookSource")
                     putExtra("key", source.bookSourceUrl)
                 }
+
                 R.id.menu_search -> callBack.searchBook(source)
                 R.id.menu_debug_source -> callBack.debug(source)
                 R.id.menu_del -> {
                     callBack.del(source)
                     selected.remove(source)
                 }
+
                 R.id.menu_enable_explore -> {
-                    callBack.update(source.copy(enabledExplore = !source.enabledExplore))
+                    callBack.enableExplore(!source.enabledExplore, source)
                 }
             }
             true
@@ -202,22 +192,43 @@ class BookSourceAdapter(context: Context, val callBack: CallBack) :
         popupMenu.show()
     }
 
-    private fun upShowExplore(iv: ImageView, source: BookSource) {
+    private fun upShowExplore(iv: ImageView, source: BookSourcePart) {
         when {
-            source.exploreUrl.isNullOrEmpty() -> {
+            !source.hasExploreUrl -> {
                 iv.invisible()
             }
+
             source.enabledExplore -> {
                 iv.setColorFilter(Color.GREEN)
                 iv.visible()
                 iv.contentDescription = context.getString(R.string.tag_explore_enabled)
             }
+
             else -> {
                 iv.setColorFilter(Color.RED)
                 iv.visible()
                 iv.contentDescription = context.getString(R.string.tag_explore_disabled)
             }
         }
+    }
+
+    private fun upCheckSourceMessage(
+        binding: ItemBookSourceBinding,
+        item: BookSourcePart
+    ) = binding.run {
+        val msg = Debug.debugMessageMap[item.bookSourceUrl] ?: ""
+        ivDebugText.text = msg
+        val isEmpty = msg.isEmpty()
+        var isFinalMessage = msg.contains(finalMessageRegex)
+        if (!Debug.isChecking && !isFinalMessage) {
+            Debug.updateFinalMessage(item.bookSourceUrl, "校验失败")
+            ivDebugText.text = Debug.debugMessageMap[item.bookSourceUrl] ?: ""
+            isFinalMessage = true
+        }
+        ivDebugText.visibility =
+            if (!isEmpty) View.VISIBLE else View.GONE
+        ivProgressBar.visibility =
+            if (isFinalMessage || isEmpty || !Debug.isChecking) View.GONE else View.VISIBLE
     }
 
     fun selectAll() {
@@ -273,7 +284,7 @@ class BookSourceAdapter(context: Context, val callBack: CallBack) :
         return true
     }
 
-    private val movedItems = hashSetOf<BookSource>()
+    private val movedItems = hashSetOf<BookSourcePart>()
 
     override fun onClearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
         if (movedItems.isNotEmpty()) {
@@ -282,21 +293,24 @@ class BookSourceAdapter(context: Context, val callBack: CallBack) :
                 sortNumberSet.add(it.customOrder)
             }
             if (movedItems.size > sortNumberSet.size) {
-                callBack.upOrder(getItems())
+                callBack.upOrder(getItems().mapIndexed { index, bookSourcePart ->
+                    bookSourcePart.customOrder = if (callBack.sortAscending) index else -index
+                    bookSourcePart
+                })
             } else {
-                callBack.update(*movedItems.toTypedArray())
+                callBack.upOrder(movedItems.toList())
             }
             movedItems.clear()
         }
     }
 
     val dragSelectCallback: DragSelectTouchHelper.Callback =
-        object : DragSelectTouchHelper.AdvanceCallback<BookSource>(Mode.ToggleAndReverse) {
-            override fun currentSelectedId(): MutableSet<BookSource> {
+        object : DragSelectTouchHelper.AdvanceCallback<BookSourcePart>(Mode.ToggleAndReverse) {
+            override fun currentSelectedId(): MutableSet<BookSourcePart> {
                 return selected
             }
 
-            override fun getItemId(position: Int): BookSource {
+            override fun getItemId(position: Int): BookSourcePart {
                 return getItem(position)!!
             }
 
@@ -316,14 +330,17 @@ class BookSourceAdapter(context: Context, val callBack: CallBack) :
         }
 
     interface CallBack {
-        fun del(bookSource: BookSource)
-        fun edit(bookSource: BookSource)
-        fun update(vararg bookSource: BookSource)
-        fun toTop(bookSource: BookSource)
-        fun toBottom(bookSource: BookSource)
-        fun searchBook(bookSource: BookSource)
-        fun debug(bookSource: BookSource)
-        fun upOrder(items: List<BookSource>)
+        val sort: BookSourceSort
+        val sortAscending: Boolean
+        fun del(bookSource: BookSourcePart)
+        fun edit(bookSource: BookSourcePart)
+        fun toTop(bookSource: BookSourcePart)
+        fun toBottom(bookSource: BookSourcePart)
+        fun searchBook(bookSource: BookSourcePart)
+        fun debug(bookSource: BookSourcePart)
+        fun upOrder(items: List<BookSourcePart>)
+        fun enable(enable: Boolean, bookSource: BookSourcePart)
+        fun enableExplore(enable: Boolean, bookSource: BookSourcePart)
         fun upCountView()
     }
 }

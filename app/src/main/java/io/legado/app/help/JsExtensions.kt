@@ -1,17 +1,19 @@
 package io.legado.app.help
 
 import android.net.Uri
+import android.webkit.WebSettings
 import androidx.annotation.Keep
 import cn.hutool.core.codec.Base64
 import cn.hutool.core.util.HexUtil
-import com.github.junrar.Archive
-import com.github.junrar.rarfile.FileHeader
+import io.legado.app.utils.ChineseUtils
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppConst.dateFormat
 import io.legado.app.constant.AppLog
+import io.legado.app.constant.AppPattern
 import io.legado.app.data.entities.BaseSource
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.http.BackstageWebView
+import io.legado.app.help.http.CookieManager.cookieJarHeader
 import io.legado.app.help.http.CookieStore
 import io.legado.app.help.http.SSLHelper
 import io.legado.app.help.http.StrResponse
@@ -20,13 +22,11 @@ import io.legado.app.model.Debug
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.analyzeRule.QueryTTF
 import io.legado.app.utils.*
+import io.legado.app.utils.compress.LibArchiveUtils
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import okio.use
-import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry
-import org.apache.commons.compress.archivers.sevenz.SevenZFile
-import org.apache.commons.compress.utils.SeekableInMemoryByteChannel
 import org.jsoup.Connection
 import org.jsoup.Jsoup
 import splitties.init.appCtx
@@ -143,6 +143,43 @@ interface JsExtensions : JsEncodeUtils {
     }
 
     /**
+     * 使用webView获取资源url
+     */
+    fun webViewGetSource(html: String?, url: String?, js: String?, sourceRegex: String): String? {
+        return runBlocking {
+            BackstageWebView(
+                url = url,
+                html = html,
+                javaScript = js,
+                headerMap = getSource()?.getHeaderMap(true),
+                tag = getSource()?.getKey(),
+                sourceRegex = sourceRegex
+            ).getStrResponse().body
+        }
+    }
+
+    /**
+     * 使用webView获取跳转url
+     */
+    fun webViewGetOverrideUrl(
+        html: String?,
+        url: String?,
+        js: String?,
+        overrideUrlRegex: String
+    ): String? {
+        return runBlocking {
+            BackstageWebView(
+                url = url,
+                html = html,
+                javaScript = js,
+                headerMap = getSource()?.getHeaderMap(true),
+                tag = getSource()?.getKey(),
+                overrideUrlRegex = overrideUrlRegex
+            ).getStrResponse().body
+        }
+    }
+
+    /**
      * 使用内置浏览器打开链接，手动验证网站防爬
      * @param url 要打开的链接
      * @param title 浏览器页面的标题
@@ -173,7 +210,7 @@ interface JsExtensions : JsEncodeUtils {
      */
     fun importScript(path: String): String {
         val result = when {
-            path.startsWith("http") -> cacheFile(path) ?: ""
+            path.startsWith("http") -> cacheFile(path)
             path.isUri() -> Uri.parse(path).readText(appCtx)
             path.startsWith("/storage") -> FileUtils.readText(path)
             else -> readTxtFile(path)
@@ -187,7 +224,7 @@ interface JsExtensions : JsEncodeUtils {
      * @param urlStr 网络文件的链接
      * @return 返回缓存后的文件内容
      */
-    fun cacheFile(urlStr: String): String? {
+    fun cacheFile(urlStr: String): String {
         return cacheFile(urlStr, 0)
     }
 
@@ -195,16 +232,20 @@ interface JsExtensions : JsEncodeUtils {
      * 缓存以文本方式保存的文件 如.js .txt等
      * @param saveTime 缓存时间，单位：秒
      */
-    fun cacheFile(urlStr: String, saveTime: Int): String? {
+    fun cacheFile(urlStr: String, saveTime: Int): String {
         val key = md5Encode16(urlStr)
-        val cache = CacheManager.getFile(key)
-        if (cache.isNullOrBlank()) {
-            log("首次下载 $urlStr")
-            val value = ajax(urlStr) ?: return null
-            CacheManager.putFile(key, value, saveTime)
-            return value
+        val cachePath = CacheManager.get(key)
+        return if (
+            cachePath.isNullOrBlank() ||
+            !getFile(cachePath).exists()
+        ) {
+            val path = downloadFile(urlStr)
+            log("首次下载 $urlStr >> $path")
+            CacheManager.put(key, path, saveTime)
+            readTxtFile(path)
+        } else {
+            readTxtFile(cachePath)
         }
-        return cache
     }
 
     /**
@@ -224,12 +265,12 @@ interface JsExtensions : JsEncodeUtils {
 
     /**
      * 下载文件
-     * @param url 下载地址:可带参数type,文件后缀,不带默认zip
+     * @param url 下载地址:可带参数type
      * @return 下载的文件相对路径
      */
     fun downloadFile(url: String): String {
         val analyzeUrl = AnalyzeUrl(url, source = getSource())
-        val type = analyzeUrl.type ?: "zip"
+        val type = UrlUtil.getSuffix(url, analyzeUrl.type)
         val path = FileUtils.getPath(
             File(FileUtils.getCachePath()),
             "${MD5Utils.md5Encode16(url)}.${type}"
@@ -250,6 +291,10 @@ interface JsExtensions : JsEncodeUtils {
      * @param url 通过url里的参数来判断文件类型
      * @return 相对路径
      */
+    @Deprecated(
+        "Depreted",
+        ReplaceWith("downloadFile(url: String)")
+    )
     fun downloadFile(content: String, url: String): String {
         val type = AnalyzeUrl(url, source = getSource()).type ?: return ""
         val path = FileUtils.getPath(
@@ -269,58 +314,55 @@ interface JsExtensions : JsEncodeUtils {
     /**
      * js实现重定向拦截,网络访问get
      */
+    @Suppress("UnnecessaryVariable")
     fun get(urlStr: String, headers: Map<String, String>): Connection.Response {
+        val requestHeaders = if (getSource()?.enabledCookieJar == true) {
+            headers.toMutableMap().apply { put(cookieJarHeader, "1") }
+        } else headers
         val response = Jsoup.connect(urlStr)
             .sslSocketFactory(SSLHelper.unsafeSSLSocketFactory)
             .ignoreContentType(true)
             .followRedirects(false)
-            .headers(headers)
+            .headers(requestHeaders)
             .method(Connection.Method.GET)
             .execute()
-        val cookies = response.cookies()
-        CookieStore.mapToCookie(cookies)?.let {
-            val domain = NetworkUtils.getSubDomain(urlStr)
-            CacheManager.putMemory("${domain}_cookieJar", it)
-        }
         return response
     }
 
     /**
      * js实现重定向拦截,网络访问head,不返回Response Body更省流量
      */
+    @Suppress("UnnecessaryVariable")
     fun head(urlStr: String, headers: Map<String, String>): Connection.Response {
+        val requestHeaders = if (getSource()?.enabledCookieJar == true) {
+            headers.toMutableMap().apply { put(cookieJarHeader, "1") }
+        } else headers
         val response = Jsoup.connect(urlStr)
             .sslSocketFactory(SSLHelper.unsafeSSLSocketFactory)
             .ignoreContentType(true)
             .followRedirects(false)
-            .headers(headers)
+            .headers(requestHeaders)
             .method(Connection.Method.HEAD)
             .execute()
-        val cookies = response.cookies()
-        CookieStore.mapToCookie(cookies)?.let {
-            val domain = NetworkUtils.getSubDomain(urlStr)
-            CacheManager.putMemory("${domain}_cookieJar", it)
-        }
         return response
     }
 
     /**
      * 网络访问post
      */
+    @Suppress("UnnecessaryVariable")
     fun post(urlStr: String, body: String, headers: Map<String, String>): Connection.Response {
+        val requestHeaders = if (getSource()?.enabledCookieJar == true) {
+            headers.toMutableMap().apply { put(cookieJarHeader, "1") }
+        } else headers
         val response = Jsoup.connect(urlStr)
             .sslSocketFactory(SSLHelper.unsafeSSLSocketFactory)
             .ignoreContentType(true)
             .followRedirects(false)
             .requestBody(body)
-            .headers(headers)
+            .headers(requestHeaders)
             .method(Connection.Method.POST)
             .execute()
-        val cookies = response.cookies()
-        CookieStore.mapToCookie(cookies)?.let {
-            val domain = NetworkUtils.getSubDomain(urlStr)
-            CacheManager.putMemory("${domain}_cookieJar", it)
-        }
         return response
     }
 
@@ -441,6 +483,18 @@ interface JsExtensions : JsEncodeUtils {
         return HtmlFormatter.formatKeepImg(str)
     }
 
+    fun t2s(text: String): String {
+        return ChineseUtils.t2s(text)
+    }
+
+    fun s2t(text: String): String {
+        return ChineseUtils.s2t(text)
+    }
+
+    fun getWebViewUA(): String {
+        return WebSettings.getDefaultUserAgent(appCtx)
+    }
+
 //****************文件操作******************//
 
     /**
@@ -486,9 +540,9 @@ interface JsExtensions : JsEncodeUtils {
     /**
      * 删除本地文件
      */
-    fun deleteFile(path: String) {
+    fun deleteFile(path: String): Boolean {
         val file = getFile(path)
-        FileUtils.delete(file, true)
+        return FileUtils.delete(file, true)
     }
 
     /**
@@ -499,6 +553,7 @@ interface JsExtensions : JsEncodeUtils {
     fun unzipFile(zipPath: String): String {
         return unArchiveFile(zipPath)
     }
+
     /**
      * js实现7Zip压缩文件解压
      * @param zipPath 相对路径
@@ -507,6 +562,7 @@ interface JsExtensions : JsEncodeUtils {
     fun un7zFile(zipPath: String): String {
         return unArchiveFile(zipPath)
     }
+
     /**
      * js实现Rar压缩文件解压
      * @param zipPath 相对路径
@@ -515,6 +571,7 @@ interface JsExtensions : JsEncodeUtils {
     fun unrarFile(zipPath: String): String {
         return unArchiveFile(zipPath)
     }
+
     /**
      * js实现压缩文件解压
      * @param zipPath 相对路径
@@ -643,18 +700,9 @@ interface JsExtensions : JsEncodeUtils {
             HexUtil.decodeHex(url)
         }
 
-        val bos = ByteArrayOutputStream()
-        Archive(ByteArrayInputStream(bytes)).use { archive ->
-            var entry: FileHeader
-            while (archive.nextFileHeader().also { entry = it } != null) {
-                if (entry.fileName.equals(path)) {
-                    archive.getInputStream(entry).use { it.copyTo(bos) }
-                    return bos.toByteArray()
-                }
-            }
+        return ByteArrayInputStream(bytes).use {
+            LibArchiveUtils.getByteArrayContent(it, path)
         }
-        log("getRarContent 未发现内容")
-        return null
     }
 
     /**
@@ -670,18 +718,9 @@ interface JsExtensions : JsEncodeUtils {
             HexUtil.decodeHex(url)
         }
 
-        val bos = ByteArrayOutputStream()
-        SevenZFile(SeekableInMemoryByteChannel(bytes)).use { sevenZFile ->
-            var entry: SevenZArchiveEntry
-            while (sevenZFile.nextEntry.also { entry = it } != null) {
-                if (entry.name.equals(path)) {
-                    sevenZFile.getInputStream(entry).use { it.copyTo(bos) }
-                    return bos.toByteArray()
-                }
-            }
+        return ByteArrayInputStream(bytes).use {
+            LibArchiveUtils.getByteArrayContent(it, path)
         }
-        log("get7zContent 未发现内容")
-        return null
     }
 
 
@@ -708,16 +747,15 @@ interface JsExtensions : JsEncodeUtils {
             var qTTF = CacheManager.getQueryTTF(key)
             if (qTTF != null) return qTTF
             val font: ByteArray? = when {
-                str.isAbsUrl() -> runBlocking {
+                str.isAbsUrl() -> {
                     var x = CacheManager.getByteArray(key)
                     if (x == null) {
                         x = AnalyzeUrl(str, source = getSource()).getByteArray()
-                        x.let {
-                            CacheManager.put(key, it)
-                        }
+                        CacheManager.put(key, x)
                     }
-                    return@runBlocking x
+                    x
                 }
+
                 str.isContentScheme() -> Uri.parse(str).readBytes(appCtx)
                 str.startsWith("/storage") -> File(str).readBytes()
                 else -> base64DecodeToByteArray(str)
@@ -757,6 +795,28 @@ interface JsExtensions : JsEncodeUtils {
         return contentArray.joinToString("")
     }
 
+
+    /**
+     * 章节数转数字
+     */
+    fun toNumChapter(s: String?): String? {
+        s ?: return null
+        val matcher = AppPattern.titleNumPattern.matcher(s)
+        if (matcher.find()) {
+            return "${matcher.group(1)}${StringUtils.stringToInt(matcher.group(2))}${matcher.group(3)}"
+        }
+        return s
+    }
+
+
+    fun toURL(urlStr: String): JsURL {
+        return JsURL(urlStr)
+    }
+
+    fun toURL(url: String, baseUrl: String? = null): JsURL {
+        return JsURL(url, baseUrl)
+    }
+
     /**
      * 弹窗提示
      */
@@ -778,7 +838,7 @@ interface JsExtensions : JsEncodeUtils {
         getSource()?.let {
             Debug.log(it.getKey(), msg.toString())
         } ?: Debug.log(msg.toString())
-        AppLog.putDebug("书源调试输出：$msg")
+        AppLog.putDebug("源调试输出：$msg")
         return msg
     }
 

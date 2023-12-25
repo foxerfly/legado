@@ -7,19 +7,18 @@ import androidx.appcompat.widget.SearchView
 import androidx.lifecycle.ViewModel
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
-import io.legado.app.databinding.ActivityImportBookBinding
-import io.legado.app.data.appDb
 import io.legado.app.constant.AppPattern
+import io.legado.app.data.appDb
+import io.legado.app.databinding.ActivityImportBookBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.ui.book.read.ReadBookActivity
-import io.legado.app.ui.document.HandleFileContract
+import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
-
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
@@ -32,7 +31,7 @@ abstract class BaseImportBookActivity<VM : ViewModel> : VMBaseActivity<ActivityI
         binding.titleBar.findViewById(R.id.search_view)
     }
 
-    private val localBookTreeSelect = registerForActivityResult(HandleFileContract()) {
+    val localBookTreeSelect = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { treeUri ->
             AppConfig.defaultBookTreeUri = treeUri.toString()
             localBookTreeSelectListener?.invoke(true)
@@ -61,10 +60,12 @@ abstract class BaseImportBookActivity<VM : ViewModel> : VMBaseActivity<ActivityI
      */
     protected suspend fun setBookStorage() = suspendCoroutine { block ->
         localBookTreeSelectListener = {
+            localBookTreeSelectListener = null
             block.resume(it)
         }
         //测试书籍保存位置是否设置
         if (!AppConfig.defaultBookTreeUri.isNullOrBlank()) {
+            localBookTreeSelectListener = null
             block.resume(true)
             return@suspendCoroutine
         }
@@ -78,9 +79,11 @@ abstract class BaseImportBookActivity<VM : ViewModel> : VMBaseActivity<ActivityI
                 }
             }
             noButton {
+                localBookTreeSelectListener = null
                 block.resume(false)
             }
             onCancelled {
+                localBookTreeSelectListener = null
                 block.resume(false)
             }
         }

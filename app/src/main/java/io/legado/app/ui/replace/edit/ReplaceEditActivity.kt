@@ -7,6 +7,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.widget.EditText
 import androidx.activity.viewModels
+import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.data.entities.ReplaceRule
@@ -17,7 +18,6 @@ import io.legado.app.ui.widget.keyboard.KeyboardToolPop
 import io.legado.app.utils.GSON
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.showDialogFragment
-import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 
 /**
@@ -50,7 +50,7 @@ class ReplaceEditActivity :
     override val viewModel by viewModels<ReplaceEditViewModel>()
 
     private val softKeyboardTool by lazy {
-        KeyboardToolPop(this, this, binding.root, this)
+        KeyboardToolPop(this, lifecycleScope, binding.root, this)
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -70,7 +70,10 @@ class ReplaceEditActivity :
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.menu_save -> saveRule()
+            R.id.menu_save -> viewModel.save(getReplaceRule()) {
+                setResult(RESULT_OK)
+                finish()
+            }
             R.id.menu_copy_rule -> sendToClip(GSON.toJson(getReplaceRule()))
             R.id.menu_paste_rule -> viewModel.pasteRule {
                 upReplaceView(it)
@@ -93,6 +96,7 @@ class ReplaceEditActivity :
         cbScopeTitle.isChecked = replaceRule.scopeTitle
         cbScopeContent.isChecked = replaceRule.scopeContent
         etScope.setText(replaceRule.scope)
+        etExcludeScope.setText(replaceRule.excludeScope)
         etTimeout.setText(replaceRule.timeoutMillisecond.toString())
     }
 
@@ -106,20 +110,9 @@ class ReplaceEditActivity :
         replaceRule.scopeTitle = cbScopeTitle.isChecked
         replaceRule.scopeContent = cbScopeContent.isChecked
         replaceRule.scope = etScope.text.toString()
+        replaceRule.excludeScope = etExcludeScope.text.toString()
         replaceRule.timeoutMillisecond = etTimeout.text.toString().ifEmpty { "3000" }.toLong()
         return replaceRule
-    }
-
-    private fun saveRule() {
-        val rule = getReplaceRule()
-        if (!rule.isValid()) {
-            toastOnUi(R.string.replace_rule_invalid)
-        } else {
-            viewModel.save(rule) {
-                setResult(RESULT_OK)
-                finish()
-            }
-        }
     }
 
     override fun helpActions(): List<SelectItem<String>> {

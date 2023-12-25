@@ -10,6 +10,7 @@ import android.widget.EditText
 import androidx.activity.viewModels
 import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.widget.SearchView
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.ItemTouchHelper
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
@@ -23,7 +24,7 @@ import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.ui.association.ImportRssSourceDialog
-import io.legado.app.ui.document.HandleFileContract
+import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
 import io.legado.app.ui.widget.SelectActionBar
@@ -219,7 +220,7 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
     }
 
     private fun initGroupFlow() {
-        launch {
+        lifecycleScope.launch {
             appDb.rssSourceDao.flowGroups().conflate().collect {
                 groups.clear()
                 groups.addAll(it)
@@ -302,14 +303,16 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
 
     private fun upSourceFlow(searchKey: String? = null) {
         sourceFlowJob?.cancel()
-        sourceFlowJob = launch {
+        sourceFlowJob = lifecycleScope.launch {
             when {
                 searchKey.isNullOrBlank() -> {
                     appDb.rssSourceDao.flowAll()
                 }
+
                 searchKey == getString(R.string.enabled) -> {
                     appDb.rssSourceDao.flowEnabled()
                 }
+
                 searchKey == getString(R.string.disabled) -> {
                     appDb.rssSourceDao.flowDisabled()
                 }

@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.os.Build
-import com.github.liuyueyi.quick.transfer.ChineseUtils
 import com.github.liuyueyi.quick.transfer.constants.TransType
 import com.jeremyliao.liveeventbus.LiveEventBus
 import io.legado.app.base.AppContextWrapper
@@ -16,18 +15,28 @@ import io.legado.app.constant.AppConst.channelIdReadAloud
 import io.legado.app.constant.AppConst.channelIdWeb
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
-import io.legado.app.help.*
+import io.legado.app.help.AppWebDav
+import io.legado.app.help.CrashHandler
+import io.legado.app.help.DefaultData
+import io.legado.app.help.LifecycleHelp
+import io.legado.app.help.RuleBigDataHelp
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeConfig.applyDayNight
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.http.Cronet
+import io.legado.app.help.http.ObsoleteUrlFactory
+import io.legado.app.help.http.okHttpClient
+import io.legado.app.help.source.SourceHelp
+import io.legado.app.help.storage.Backup
 import io.legado.app.model.BookCover
+import io.legado.app.utils.ChineseUtils
 import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.getPrefBoolean
 import kotlinx.coroutines.launch
 import splitties.init.appCtx
 import splitties.systemservices.notificationManager
+import java.net.URL
 import java.util.concurrent.TimeUnit
 
 class App : Application() {
@@ -41,14 +50,15 @@ class App : Application() {
         //预下载Cronet so
         Cronet.preDownload()
         createNotificationChannels()
-        applyDayNight(this)
         LiveEventBus.config()
             .lifecycleObserverAlwaysActive(true)
             .autoClear(false)
+        applyDayNight(this)
         registerActivityLifecycleCallbacks(LifecycleHelp)
         defaultSharedPreferences.registerOnSharedPreferenceChangeListener(AppConfig)
         DefaultData.upVersion()
         Coroutine.async {
+            URL.setURLStreamHandlerFactory(ObsoleteUrlFactory(okHttpClient))
             launch { installGmsTlsProvider(appCtx) }
             //初始化封面
             BookCover.toString()
@@ -60,11 +70,17 @@ class App : Application() {
             }
             RuleBigDataHelp.clearInvalid()
             BookHelp.clearInvalidCache()
+            Backup.clearCache()
             //初始化简繁转换引擎
             when (AppConfig.chineseConverterType) {
-                1 -> ChineseUtils.preLoad(true, TransType.TRADITIONAL_TO_SIMPLE)
+                1 -> launch {
+                    ChineseUtils.fixT2sDict()
+                }
+
                 2 -> ChineseUtils.preLoad(true, TransType.SIMPLE_TO_TRADITIONAL)
             }
+            //调整排序序号
+            SourceHelp.adjustSortNumber()
             //同步阅读记录
             if (AppConfig.syncBookProgress) {
                 AppWebDav.downloadAllBookProgress()
@@ -123,6 +139,7 @@ class App : Application() {
             enableLights(false)
             enableVibration(false)
             setSound(null, null)
+            importance = NotificationManager.IMPORTANCE_LOW
         }
 
         val readAloudChannel = NotificationChannel(
@@ -133,6 +150,7 @@ class App : Application() {
             enableLights(false)
             enableVibration(false)
             setSound(null, null)
+            importance = NotificationManager.IMPORTANCE_LOW
         }
 
         val webChannel = NotificationChannel(
@@ -143,6 +161,7 @@ class App : Application() {
             enableLights(false)
             enableVibration(false)
             setSound(null, null)
+            importance = NotificationManager.IMPORTANCE_LOW
         }
 
         //向notification manager 提交channel

@@ -1,26 +1,39 @@
 package io.legado.app.utils.compress
 
+import android.annotation.SuppressLint
 import io.legado.app.utils.DebugLog
 import io.legado.app.utils.printOnDebug
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.withContext
-import org.apache.commons.compress.archivers.ArchiveEntry
-import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream
 import java.io.*
 import java.util.zip.*
 
-
-@Suppress("unused", "BlockingMethodInNonBlockingContext", "MemberVisibilityCanBePrivate")
+@SuppressLint("ObsoleteSdkInt")
+@Suppress("unused", "MemberVisibilityCanBePrivate")
 object ZipUtils {
 
-    fun zipString(text: String): ByteArray {
+    fun gzipByteArray(byteArray: ByteArray): ByteArray {
         val byteOut = ByteArrayOutputStream()
         val zip = GZIPOutputStream(byteOut)
-        zip.use {
-            it.write(text.toByteArray())
+        return zip.use {
+            it.write(byteArray)
+            byteOut.use {
+                byteOut.toByteArray()
+            }
         }
-        return byteOut.use {
-            it.toByteArray()
+    }
+
+    fun zipByteArray(byteArray: ByteArray, fileName: String): ByteArray {
+        val byteOut = ByteArrayOutputStream()
+        val zipOutputStream = ZipOutputStream(byteOut)
+        zipOutputStream.putNextEntry(ZipEntry(fileName))
+        zipOutputStream.write(byteArray)
+        zipOutputStream.closeEntry()
+        zipOutputStream.finish()
+        return zipOutputStream.use {
+            byteOut.use {
+                byteOut.toByteArray()
+            }
         }
     }
 
@@ -167,11 +180,11 @@ object ZipUtils {
                 }
             }
         } else {
-            BufferedInputStream(FileInputStream(srcFile)).use { `is` ->
+            BufferedInputStream(FileInputStream(srcFile)).use {
                 val entry = ZipEntry(rootPath1)
                 entry.comment = comment
                 zos.putNextEntry(entry)
-                zos.write(`is`.readBytes())
+                it.copyTo(zos)
                 zos.closeEntry()
             }
         }
@@ -193,27 +206,35 @@ object ZipUtils {
     }
 
     @Throws(SecurityException::class)
-    fun unZipToPath(inputStream: InputStream, path: String, filter: ((String) -> Boolean)? = null): List<File> {
-        return ZipArchiveInputStream(inputStream).use {
+    fun unZipToPath(
+        inputStream: InputStream,
+        path: String,
+        filter: ((String) -> Boolean)? = null
+    ): List<File> {
+        return ZipInputStream(inputStream).use {
             unZipToPath(it, File(path), filter)
         }
     }
 
     @Throws(SecurityException::class)
-    fun unZipToPath(inputStream: InputStream, dir: File, filter: ((String) -> Boolean)? = null): List<File> {
-        return ZipArchiveInputStream(inputStream).use {
+    fun unZipToPath(
+        inputStream: InputStream,
+        dir: File,
+        filter: ((String) -> Boolean)? = null
+    ): List<File> {
+        return ZipInputStream(inputStream).use {
             unZipToPath(it, dir, filter)
         }
     }
 
     @Throws(SecurityException::class)
     private fun unZipToPath(
-        zipInputStream: ZipArchiveInputStream,
+        zipInputStream: ZipInputStream,
         dir: File,
         filter: ((String) -> Boolean)? = null
     ): List<File> {
         val files = arrayListOf<File>()
-        var entry: ArchiveEntry?
+        var entry: ZipEntry?
         while (zipInputStream.nextEntry.also { entry = it } != null) {
             val entryName = entry!!.name
             val entryFile = File(dir, entryName)
@@ -249,25 +270,25 @@ object ZipUtils {
         inputStream: InputStream,
         filter: ((String) -> Boolean)? = null
     ): List<String> {
-        return ZipArchiveInputStream(inputStream).use {
+        return ZipInputStream(inputStream).use {
             getFilesName(it, filter)
         }
     }
 
     @Throws(SecurityException::class)
     private fun getFilesName(
-        zipInputStream: ZipArchiveInputStream,
+        zipInputStream: ZipInputStream,
         filter: ((String) -> Boolean)? = null
     ): List<String> {
         val fileNames = mutableListOf<String>()
-        var entry: ArchiveEntry?
+        var entry: ZipEntry?
         while (zipInputStream.nextEntry.also { entry = it } != null) {
             if (entry!!.isDirectory) {
                 continue
             }
             val fileName = entry!!.name
             if (filter != null && filter.invoke(fileName))
-            fileNames.add(fileName)
+                fileNames.add(fileName)
         }
         return fileNames
     }

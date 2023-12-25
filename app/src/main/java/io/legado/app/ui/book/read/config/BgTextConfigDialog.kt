@@ -31,7 +31,7 @@ import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.lib.theme.getSecondaryTextColor
 import io.legado.app.ui.book.read.ReadBookActivity
-import io.legado.app.ui.document.HandleFileContract
+import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
 import io.legado.app.utils.*
 import io.legado.app.utils.compress.ZipUtils
@@ -112,6 +112,7 @@ class BgTextConfigDialog : BaseDialogFragment(R.layout.dialog_read_bg_text) {
         ivEdit.setColorFilter(secondaryTextColor, PorterDuff.Mode.SRC_IN)
         tvRestore.setTextColor(primaryTextColor)
         swDarkStatusIcon.setTextColor(primaryTextColor)
+        swUnderline.setTextColor(primaryTextColor)
         ivImport.setColorFilter(primaryTextColor, PorterDuff.Mode.SRC_IN)
         ivExport.setColorFilter(primaryTextColor, PorterDuff.Mode.SRC_IN)
         ivDelete.setColorFilter(primaryTextColor, PorterDuff.Mode.SRC_IN)
@@ -138,6 +139,7 @@ class BgTextConfigDialog : BaseDialogFragment(R.layout.dialog_read_bg_text) {
     private fun initData() = with(ReadBookConfig.durConfig) {
         binding.tvName.text = name.ifBlank { "文字" }
         binding.swDarkStatusIcon.isChecked = curStatusIconDark()
+        binding.swUnderline.isChecked = underline
         binding.sbBgAlpha.progress = bgAlpha
     }
 
@@ -173,6 +175,10 @@ class BgTextConfigDialog : BaseDialogFragment(R.layout.dialog_read_bg_text) {
         binding.swDarkStatusIcon.setOnCheckedChangeListener { _, isChecked ->
             setCurStatusIconDark(isChecked)
             (activity as? ReadBookActivity)?.upSystemUiVisibility()
+        }
+        binding.swUnderline.setOnCheckedChangeListener { _, isChecked ->
+            underline = isChecked
+            postEvent(EventBus.UP_CONFIG, true)
         }
         binding.tvTextColor.setOnClickListener {
             ColorPickerDialog.newBuilder()
@@ -226,7 +232,6 @@ class BgTextConfigDialog : BaseDialogFragment(R.layout.dialog_read_bg_text) {
         })
     }
 
-    @Suppress("BlockingMethodInNonBlockingContext")
     private fun exportConfig(uri: Uri) {
         val exportFileName = if (ReadBookConfig.config.name.isBlank()) {
             configFileName
@@ -244,10 +249,11 @@ class BgTextConfigDialog : BaseDialogFragment(R.layout.dialog_read_bg_text) {
             val fontPath = ReadBookConfig.textFont
             if (fontPath.isNotEmpty()) {
                 val fontName = FileUtils.getName(fontPath)
-                val fontBytes = fontPath.parseToUri().readBytes(requireContext())
-                fontBytes.let {
+                val fontInputStream =
+                    fontPath.parseToUri().inputStream(requireContext()).getOrNull()
+                fontInputStream?.use {
                     val fontExportFile = FileUtils.createFileIfNotExist(configDir, fontName)
-                    fontExportFile.writeBytes(it)
+                    it.copyTo(fontExportFile.outputStream())
                     exportFiles.add(fontExportFile)
                 }
             }
@@ -256,8 +262,10 @@ class BgTextConfigDialog : BaseDialogFragment(R.layout.dialog_read_bg_text) {
                 val bgFile = File(ReadBookConfig.durConfig.bgStr)
                 if (bgFile.exists()) {
                     val bgExportFile = File(FileUtils.getPath(configDir, bgName))
-                    bgFile.copyTo(bgExportFile)
-                    exportFiles.add(bgExportFile)
+                    if (!bgExportFile.exists()) {
+                        bgFile.copyTo(bgExportFile)
+                        exportFiles.add(bgExportFile)
+                    }
                 }
             }
             if (ReadBookConfig.durConfig.bgTypeNight == 2) {
@@ -265,8 +273,10 @@ class BgTextConfigDialog : BaseDialogFragment(R.layout.dialog_read_bg_text) {
                 val bgFile = File(ReadBookConfig.durConfig.bgStrNight)
                 if (bgFile.exists()) {
                     val bgExportFile = File(FileUtils.getPath(configDir, bgName))
-                    bgFile.copyTo(bgExportFile)
-                    exportFiles.add(bgExportFile)
+                    if (!bgExportFile.exists()) {
+                        bgFile.copyTo(bgExportFile)
+                        exportFiles.add(bgExportFile)
+                    }
                 }
             }
             if (ReadBookConfig.durConfig.bgTypeEInk == 2) {
@@ -274,8 +284,10 @@ class BgTextConfigDialog : BaseDialogFragment(R.layout.dialog_read_bg_text) {
                 val bgFile = File(ReadBookConfig.durConfig.bgStrEInk)
                 if (bgFile.exists()) {
                     val bgExportFile = File(FileUtils.getPath(configDir, bgName))
-                    bgFile.copyTo(bgExportFile)
-                    exportFiles.add(bgExportFile)
+                    if (!bgExportFile.exists()) {
+                        bgFile.copyTo(bgExportFile)
+                        exportFiles.add(bgExportFile)
+                    }
                 }
             }
             val configZipPath = FileUtils.getPath(requireContext().externalCache, configFileName)
@@ -283,14 +295,17 @@ class BgTextConfigDialog : BaseDialogFragment(R.layout.dialog_read_bg_text) {
                 if (uri.isContentScheme()) {
                     DocumentFile.fromTreeUri(requireContext(), uri)?.let { treeDoc ->
                         treeDoc.findFile(exportFileName)?.delete()
-                        treeDoc.createFile("", exportFileName)
-                            ?.writeBytes(requireContext(), File(configZipPath).readBytes())
+                        val out = treeDoc.createFile("", exportFileName)?.openOutputStream()
+                        out?.use {
+                            File(configZipPath).inputStream().use {
+                                it.copyTo(out)
+                            }
+                        }
                     }
                 } else {
                     val exportPath = FileUtils.getPath(File(uri.path!!), exportFileName)
                     FileUtils.delete(exportPath)
-                    FileUtils.createFileIfNotExist(exportPath)
-                        .writeBytes(File(configZipPath).readBytes())
+                    File(configZipPath).copyTo(FileUtils.createFileIfNotExist(exportPath))
                 }
             }
         }.onSuccess {
@@ -318,7 +333,6 @@ class BgTextConfigDialog : BaseDialogFragment(R.layout.dialog_read_bg_text) {
 
     private fun importNetConfig(url: String) {
         execute {
-            @Suppress("BlockingMethodInNonBlockingContext")
             okHttpClient.newCallResponseBody {
                 url(url)
             }.bytes().let {
@@ -331,7 +345,6 @@ class BgTextConfigDialog : BaseDialogFragment(R.layout.dialog_read_bg_text) {
 
     private fun importConfig(uri: Uri) {
         execute {
-            @Suppress("BlockingMethodInNonBlockingContext")
             importConfig(uri.readBytes(requireContext()))
         }.onError {
             it.printOnDebug()
@@ -339,7 +352,6 @@ class BgTextConfigDialog : BaseDialogFragment(R.layout.dialog_read_bg_text) {
         }
     }
 
-    @Suppress("BlockingMethodInNonBlockingContext", "BlockingMethodInNonBlockingContext")
     private fun importConfig(byteArray: ByteArray) {
         execute {
             ReadBookConfig.import(byteArray).getOrThrow()
@@ -365,7 +377,7 @@ class BgTextConfigDialog : BaseDialogFragment(R.layout.dialog_read_bg_text) {
                 FileOutputStream(file).use { outputStream ->
                     inputStream.copyTo(outputStream)
                 }
-                ReadBookConfig.durConfig.setCurBg(2, file.absolutePath)
+                ReadBookConfig.durConfig.setCurBg(2, fileName)
                 postEvent(EventBus.UP_CONFIG, false)
             }.onFailure {
                 appCtx.toastOnUi(it.localizedMessage)

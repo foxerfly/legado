@@ -1,21 +1,27 @@
 package io.legado.app.ui.book.source.edit
 
 import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.EditText
 import androidx.activity.viewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.tabs.TabLayout
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
-import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.BookSourceType
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
-import io.legado.app.data.entities.rule.*
+import io.legado.app.data.entities.rule.BookInfoRule
+import io.legado.app.data.entities.rule.ContentRule
+import io.legado.app.data.entities.rule.ExploreRule
+import io.legado.app.data.entities.rule.ReviewRule
+import io.legado.app.data.entities.rule.SearchRule
+import io.legado.app.data.entities.rule.TocRule
 import io.legado.app.databinding.ActivityBookSourceEditBinding
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.lib.dialogs.SelectItem
@@ -24,8 +30,10 @@ import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
+import io.legado.app.ui.book.search.SearchActivity
+import io.legado.app.ui.book.search.SearchScope
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
-import io.legado.app.ui.document.HandleFileContract
+import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.ui.widget.dialog.TextDialog
@@ -33,7 +41,15 @@ import io.legado.app.ui.widget.dialog.UrlOptionDialog
 import io.legado.app.ui.widget.dialog.VariableDialog
 import io.legado.app.ui.widget.keyboard.KeyboardToolPop
 import io.legado.app.ui.widget.text.EditEntity
-import io.legado.app.utils.*
+import io.legado.app.utils.GSON
+import io.legado.app.utils.isContentScheme
+import io.legado.app.utils.launch
+import io.legado.app.utils.sendToClip
+import io.legado.app.utils.setEdgeEffectColor
+import io.legado.app.utils.share
+import io.legado.app.utils.shareWithQr
+import io.legado.app.utils.showDialogFragment
+import io.legado.app.utils.startActivity
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
@@ -72,7 +88,7 @@ class BookSourceEditActivity :
     }
 
     private val softKeyboardTool by lazy {
-        KeyboardToolPop(this, this, binding.root, this)
+        KeyboardToolPop(this, lifecycleScope, binding.root, this)
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -103,23 +119,17 @@ class BookSourceEditActivity :
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.menu_save -> getSource().let { source ->
-                if (!source.equal(viewModel.bookSource ?: BookSource())) {
-                    source.lastUpdateTime = System.currentTimeMillis()
-                }
-                if (checkSource(source)) {
-                    viewModel.save(source) { setResult(Activity.RESULT_OK); finish() }
+            R.id.menu_save -> viewModel.save(getSource()) {
+                setResult(Activity.RESULT_OK, Intent().putExtra("origin", it.bookSourceUrl))
+                finish()
+            }
+
+            R.id.menu_debug_source -> viewModel.save(getSource()) { source ->
+                startActivity<BookSourceDebugActivity> {
+                    putExtra("key", source.bookSourceUrl)
                 }
             }
-            R.id.menu_debug_source -> getSource().let { source ->
-                if (checkSource(source)) {
-                    viewModel.save(source) {
-                        startActivity<BookSourceDebugActivity> {
-                            putExtra("key", source.bookSourceUrl)
-                        }
-                    }
-                }
-            }
+
             R.id.menu_clear_cookie -> viewModel.clearCookie(getSource().bookSourceUrl)
             R.id.menu_auto_complete -> viewModel.autoComplete = !viewModel.autoComplete
             R.id.menu_copy_source -> sendToClip(GSON.toJson(getSource()))
@@ -131,18 +141,22 @@ class BookSourceEditActivity :
                 getString(R.string.share_book_source),
                 ErrorCorrectionLevel.L
             )
+
             R.id.menu_help -> showHelp("ruleHelp")
-            R.id.menu_login -> getSource().let { source ->
-                if (checkSource(source)) {
-                    viewModel.save(source) {
-                        startActivity<SourceLoginActivity> {
-                            putExtra("type", "bookSource")
-                            putExtra("key", source.bookSourceUrl)
-                        }
-                    }
+            R.id.menu_login -> viewModel.save(getSource()) { source ->
+                startActivity<SourceLoginActivity> {
+                    putExtra("type", "bookSource")
+                    putExtra("key", source.bookSourceUrl)
                 }
             }
+
             R.id.menu_set_source_variable -> setSourceVariable()
+            R.id.menu_search -> viewModel.save(getSource()) { source ->
+                startActivity<SearchActivity> {
+                    putExtra("searchScope", SearchScope(source).toString())
+                }
+            }
+
         }
         return super.onCompatOptionsItemSelected(item)
     }
@@ -166,12 +180,6 @@ class BookSourceEditActivity :
         binding.tabLayout.addTab(binding.tabLayout.newTab().apply {
             setText(R.string.source_tab_content)
         })
-        if (BuildConfig.DEBUG) {
-            binding.cbIsEnableReview.visible()
-            binding.tabLayout.addTab(binding.tabLayout.newTab().apply {
-                setText(R.string.review)
-            })
-        }
         binding.recyclerView.setEdgeEffectColor(primaryColor)
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = adapter
@@ -231,7 +239,6 @@ class BookSourceEditActivity :
             binding.cbIsEnable.isChecked = it.enabled
             binding.cbIsEnableExplore.isChecked = it.enabledExplore
             binding.cbIsEnableCookie.isChecked = it.enabledCookieJar ?: false
-            binding.cbIsEnableReview.isChecked = it.enabledReview ?: false
             binding.spType.setSelection(
                 when (it.bookSourceType) {
                     BookSourceType.file -> 3
@@ -256,6 +263,7 @@ class BookSourceEditActivity :
             add(EditEntity("header", bs.header, R.string.source_http_header))
             add(EditEntity("variableComment", bs.variableComment, R.string.variable_comment))
             add(EditEntity("concurrentRate", bs.concurrentRate, R.string.concurrent_rate))
+            add(EditEntity("jsLib", bs.jsLib, "jsLib"))
         }
         // 搜索
         val sr = bs.getSearchRule()
@@ -312,6 +320,7 @@ class BookSourceEditActivity :
             add(EditEntity("chapterList", tr.chapterList, R.string.rule_chapter_list))
             add(EditEntity("chapterName", tr.chapterName, R.string.rule_chapter_name))
             add(EditEntity("chapterUrl", tr.chapterUrl, R.string.rule_chapter_url))
+            add(EditEntity("formatJs", tr.formatJs, R.string.format_js_rule))
             add(EditEntity("isVolume", tr.isVolume, R.string.rule_is_volume))
             add(EditEntity("updateTime", tr.updateTime, R.string.rule_update_time))
             add(EditEntity("isVip", tr.isVip, R.string.rule_is_vip))
@@ -323,6 +332,7 @@ class BookSourceEditActivity :
         contentEntities.clear()
         contentEntities.apply {
             add(EditEntity("content", cr.content, R.string.rule_book_content))
+            add(EditEntity("title", cr.title, R.string.rule_chapter_name))
             add(EditEntity("nextContentUrl", cr.nextContentUrl, R.string.rule_next_content))
             add(EditEntity("webJs", cr.webJs, R.string.rule_web_js))
             add(EditEntity("sourceRegex", cr.sourceRegex, R.string.rule_source_regex))
@@ -355,7 +365,6 @@ class BookSourceEditActivity :
         source.enabled = binding.cbIsEnable.isChecked
         source.enabledExplore = binding.cbIsEnableExplore.isChecked
         source.enabledCookieJar = binding.cbIsEnableCookie.isChecked
-        source.enabledReview = binding.cbIsEnableReview.isChecked
         source.bookSourceType = when (binding.spType.selectedItemPosition) {
             3 -> BookSourceType.file
             2 -> BookSourceType.image
@@ -382,6 +391,7 @@ class BookSourceEditActivity :
                 "bookSourceComment" -> source.bookSourceComment = it.value
                 "concurrentRate" -> source.concurrentRate = it.value
                 "variableComment" -> source.variableComment = it.value
+                "jsLib" -> source.jsLib = it.value
             }
         }
         searchEntities.forEach {
@@ -391,20 +401,28 @@ class BookSourceEditActivity :
                 "bookList" -> searchRule.bookList = it.value
                 "name" -> searchRule.name =
                     viewModel.ruleComplete(it.value, searchRule.bookList)
+
                 "author" -> searchRule.author =
                     viewModel.ruleComplete(it.value, searchRule.bookList)
+
                 "kind" -> searchRule.kind =
                     viewModel.ruleComplete(it.value, searchRule.bookList)
+
                 "intro" -> searchRule.intro =
                     viewModel.ruleComplete(it.value, searchRule.bookList)
-                "updateTime" -> searchRule.updateTime =
-                    viewModel.ruleComplete(it.value, searchRule.bookList)
+
+//                "updateTime" -> searchRule.updateTime =
+//                    viewModel.ruleComplete(it.value, searchRule.bookList)
+
                 "wordCount" -> searchRule.wordCount =
                     viewModel.ruleComplete(it.value, searchRule.bookList)
+
                 "lastChapter" -> searchRule.lastChapter =
                     viewModel.ruleComplete(it.value, searchRule.bookList)
+
                 "coverUrl" -> searchRule.coverUrl =
                     viewModel.ruleComplete(it.value, searchRule.bookList, 3)
+
                 "bookUrl" -> searchRule.bookUrl =
                     viewModel.ruleComplete(it.value, searchRule.bookList, 2)
             }
@@ -415,20 +433,28 @@ class BookSourceEditActivity :
                 "bookList" -> exploreRule.bookList = it.value
                 "name" -> exploreRule.name =
                     viewModel.ruleComplete(it.value, exploreRule.bookList)
+
                 "author" -> exploreRule.author =
                     viewModel.ruleComplete(it.value, exploreRule.bookList)
+
                 "kind" -> exploreRule.kind =
                     viewModel.ruleComplete(it.value, exploreRule.bookList)
+
                 "intro" -> exploreRule.intro =
                     viewModel.ruleComplete(it.value, exploreRule.bookList)
-                "updateTime" -> exploreRule.updateTime =
-                    viewModel.ruleComplete(it.value, exploreRule.bookList)
+
+//                "updateTime" -> exploreRule.updateTime =
+//                    viewModel.ruleComplete(it.value, exploreRule.bookList)
+
                 "wordCount" -> exploreRule.wordCount =
                     viewModel.ruleComplete(it.value, exploreRule.bookList)
+
                 "lastChapter" -> exploreRule.lastChapter =
                     viewModel.ruleComplete(it.value, exploreRule.bookList)
+
                 "coverUrl" -> exploreRule.coverUrl =
                     viewModel.ruleComplete(it.value, exploreRule.bookList, 3)
+
                 "bookUrl" -> exploreRule.bookUrl =
                     viewModel.ruleComplete(it.value, exploreRule.bookList, 2)
             }
@@ -439,20 +465,28 @@ class BookSourceEditActivity :
                 "name" -> bookInfoRule.name = viewModel.ruleComplete(it.value, bookInfoRule.init)
                 "author" -> bookInfoRule.author =
                     viewModel.ruleComplete(it.value, bookInfoRule.init)
+
                 "kind" -> bookInfoRule.kind =
                     viewModel.ruleComplete(it.value, bookInfoRule.init)
+
                 "intro" -> bookInfoRule.intro =
                     viewModel.ruleComplete(it.value, bookInfoRule.init)
-                "updateTime" -> bookInfoRule.updateTime =
-                    viewModel.ruleComplete(it.value, bookInfoRule.init)
+
+//                "updateTime" -> bookInfoRule.updateTime =
+//                    viewModel.ruleComplete(it.value, bookInfoRule.init)
+
                 "wordCount" -> bookInfoRule.wordCount =
                     viewModel.ruleComplete(it.value, bookInfoRule.init)
+
                 "lastChapter" -> bookInfoRule.lastChapter =
                     viewModel.ruleComplete(it.value, bookInfoRule.init)
+
                 "coverUrl" -> bookInfoRule.coverUrl =
                     viewModel.ruleComplete(it.value, bookInfoRule.init, 3)
+
                 "tocUrl" -> bookInfoRule.tocUrl =
                     viewModel.ruleComplete(it.value, bookInfoRule.init, 2)
+
                 "canReName" -> bookInfoRule.canReName = it.value
                 "downloadUrls" -> bookInfoRule.downloadUrls =
                     viewModel.ruleComplete(it.value, bookInfoRule.init)
@@ -464,8 +498,11 @@ class BookSourceEditActivity :
                 "chapterList" -> tocRule.chapterList = it.value
                 "chapterName" -> tocRule.chapterName =
                     viewModel.ruleComplete(it.value, tocRule.chapterList)
+
                 "chapterUrl" -> tocRule.chapterUrl =
                     viewModel.ruleComplete(it.value, tocRule.chapterList, 2)
+
+                "formatJs" -> tocRule.formatJs = it.value
                 "isVolume" -> tocRule.isVolume = it.value
                 "updateTime" -> tocRule.updateTime = it.value
                 "isVip" -> tocRule.isVip = it.value
@@ -476,10 +513,11 @@ class BookSourceEditActivity :
         }
         contentEntities.forEach {
             when (it.key) {
-                "content" -> contentRule.content =
-                    viewModel.ruleComplete(it.value)
+                "content" -> contentRule.content = viewModel.ruleComplete(it.value)
+                "title" -> contentRule.title = viewModel.ruleComplete(it.value)
                 "nextContentUrl" -> contentRule.nextContentUrl =
                     viewModel.ruleComplete(it.value, type = 2)
+
                 "webJs" -> contentRule.webJs = it.value
                 "sourceRegex" -> contentRule.sourceRegex = it.value
                 "replaceRegex" -> contentRule.replaceRegex = it.value
@@ -493,12 +531,16 @@ class BookSourceEditActivity :
                 "reviewUrl" -> reviewRule.reviewUrl = it.value
                 "avatarRule" -> reviewRule.avatarRule =
                     viewModel.ruleComplete(it.value, reviewRule.reviewUrl, 3)
+
                 "contentRule" -> reviewRule.contentRule =
                     viewModel.ruleComplete(it.value, reviewRule.reviewUrl)
+
                 "postTimeRule" -> reviewRule.postTimeRule =
                     viewModel.ruleComplete(it.value, reviewRule.reviewUrl)
+
                 "reviewQuoteUrl" -> reviewRule.reviewQuoteUrl =
                     viewModel.ruleComplete(it.value, reviewRule.reviewUrl, 2)
+
                 "voteUpUrl" -> reviewRule.voteUpUrl = it.value
                 "voteDownUrl" -> reviewRule.voteDownUrl = it.value
                 "postReviewUrl" -> reviewRule.postReviewUrl = it.value
@@ -515,18 +557,10 @@ class BookSourceEditActivity :
         return source
     }
 
-    private fun checkSource(source: BookSource): Boolean {
-        if (source.bookSourceUrl.isBlank() || source.bookSourceName.isBlank()) {
-            toastOnUi(R.string.non_null_name_url)
-            return false
-        }
-        return true
-    }
-
     private fun alertGroups() {
-        launch {
+        lifecycleScope.launch {
             val groups = withContext(IO) {
-                appDb.bookSourceDao.allGroups
+                appDb.bookSourceDao.allGroups()
             }
             selector(groups) { _, s, _ ->
                 sendText(s)
@@ -549,6 +583,7 @@ class BookSourceEditActivity :
                         SelectItem("插入分组", "addGroup")
                     )
                 }
+
                 else -> {
                     helpActions.add(
                         SelectItem("选择文件", "selectFile")
@@ -594,22 +629,20 @@ class BookSourceEditActivity :
     }
 
     private fun setSourceVariable() {
-        launch {
-            val source = viewModel.bookSource
-            if (source == null) {
-                toastOnUi("先保存书源")
-                return@launch
-            }
-            val comment = source.getDisplayVariableComment("源变量可在js中通过source.getVariable()获取")
-            val variable = withContext(IO) { source.getVariable() }
-            showDialogFragment(
-                VariableDialog(
-                    getString(R.string.set_source_variable),
-                    source.getKey(),
-                    variable,
-                    comment
+        viewModel.save(getSource()) { source ->
+            lifecycleScope.launch {
+                val comment =
+                    source.getDisplayVariableComment("源变量可在js中通过source.getVariable()获取")
+                val variable = withContext(IO) { source.getVariable() }
+                showDialogFragment(
+                    VariableDialog(
+                        getString(R.string.set_source_variable),
+                        source.getKey(),
+                        variable,
+                        comment
+                    )
                 )
-            )
+            }
         }
     }
 

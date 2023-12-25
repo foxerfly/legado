@@ -6,6 +6,7 @@ import android.app.DownloadManager
 import android.content.Context
 import android.database.Cursor
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
 import androidx.documentfile.provider.DocumentFile
 import io.legado.app.exception.NoStackTraceException
@@ -33,6 +34,31 @@ data class FileDoc(
 
     fun readBytes(): ByteArray {
         return uri.readBytes(appCtx)
+    }
+
+    fun asDocumentFile(): DocumentFile? {
+        if (isContentScheme) {
+            return if (isDir) {
+                Class.forName("androidx.documentfile.provider.TreeDocumentFile")
+                    .getDeclaredConstructor(
+                        DocumentFile::class.java,
+                        Context::class.java,
+                        Uri::class.java
+                    ).apply {
+                        isAccessible = true
+                    }.newInstance(null, appCtx, uri) as DocumentFile
+            } else {
+                DocumentFile.fromSingleUri(appCtx, uri)
+            }
+        }
+        return null
+    }
+
+    fun asFile(): File? {
+        if (isContentScheme) {
+            return null
+        }
+        return File(uri.path!!)
     }
 
     companion object {
@@ -183,12 +209,11 @@ fun FileDoc.find(name: String, depth: Int = 0): FileDoc? {
 
 fun FileDoc.createFileIfNotExist(
     fileName: String,
-    mimeType: String = "",
     vararg subDirs: String
 ): FileDoc {
     return if (uri.isContentScheme()) {
-        val documentFile = DocumentFile.fromTreeUri(appCtx, uri)!!
-        val tmp = DocumentUtils.createFileIfNotExist(documentFile, fileName, mimeType, *subDirs)!!
+        val documentFile = asDocumentFile()!!
+        val tmp = DocumentUtils.createFileIfNotExist(documentFile, fileName, *subDirs)!!
         FileDoc.fromDocumentFile(tmp)
     } else {
         val path = FileUtils.getPath(uri.path!!, *subDirs) + File.separator + fileName
@@ -201,7 +226,7 @@ fun FileDoc.createFolderIfNotExist(
     vararg subDirs: String
 ): FileDoc {
     return if (uri.isContentScheme()) {
-        val documentFile = DocumentFile.fromTreeUri(appCtx, uri)!!
+        val documentFile = asDocumentFile()!!
         val tmp = DocumentUtils.createFolderIfNotExist(documentFile, *subDirs)!!
         FileDoc.fromDocumentFile(tmp)
     } else {
@@ -215,12 +240,24 @@ fun FileDoc.openInputStream(): Result<InputStream> {
     return uri.inputStream(appCtx)
 }
 
+fun FileDoc.openOutputStream(): Result<OutputStream> {
+    return uri.outputStream(appCtx)
+}
+
+fun FileDoc.openReadPfd(): Result<ParcelFileDescriptor> {
+    return uri.toReadPfd(appCtx)
+}
+
+fun FileDoc.openWritePfd(): Result<ParcelFileDescriptor> {
+    return uri.toWritePfd(appCtx)
+}
+
 fun FileDoc.exists(
     fileName: String,
     vararg subDirs: String
 ): Boolean {
     return if (uri.isContentScheme()) {
-        DocumentUtils.exists(DocumentFile.fromTreeUri(appCtx, uri)!!, fileName, *subDirs)
+        DocumentUtils.exists(asDocumentFile()!!, fileName, *subDirs)
     } else {
         val path = FileUtils.getPath(uri.path!!, *subDirs) + File.separator + fileName
         FileUtils.exist(path)
@@ -229,10 +266,35 @@ fun FileDoc.exists(
 
 fun FileDoc.exists(): Boolean {
     return if (uri.isContentScheme()) {
-        DocumentFile.fromTreeUri(appCtx, uri)!!.exists()
+        asDocumentFile()!!.exists()
     } else {
         FileUtils.exist(uri.path!!)
     }
+}
+
+fun FileDoc.writeText(text: String) {
+    if (uri.isContentScheme()) {
+        uri.writeText(appCtx, text)
+    } else {
+        File(uri.path!!).writeText(text)
+    }
+}
+
+fun FileDoc.delete() {
+    asFile()?.let {
+        FileUtils.delete(it, true)
+    }
+    asDocumentFile()?.delete()
+}
+
+fun FileDoc.checkWrite(): Boolean? {
+    if (!isDir) {
+        throw NoStackTraceException("只能检查目录")
+    }
+    asFile()?.let {
+        return it.checkWrite()
+    }
+    return asDocumentFile()?.checkWrite()
 }
 
 /**
@@ -276,4 +338,20 @@ fun DocumentFile.readBytes(context: Context): ByteArray {
         it.close()
         return buffer
     } ?: throw NoStackTraceException("打开文件失败\n${uri}")
+}
+
+fun DocumentFile.checkWrite(): Boolean {
+    return try {
+        val filename = System.currentTimeMillis().toString()
+        createFile(FileUtils.getMimeType(filename), filename)?.let {
+            it.openOutputStream()?.let { out ->
+                out.use { }
+                it.delete()
+                return true
+            }
+        }
+        false
+    } catch (e: Exception) {
+        false
+    }
 }

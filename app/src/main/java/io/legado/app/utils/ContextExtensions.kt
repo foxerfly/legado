@@ -1,13 +1,22 @@
-@file:Suppress("unused")
+@file:Suppress("unused", "UnusedReceiverParameter")
 
 package io.legado.app.utils
 
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.PendingIntent
-import android.app.PendingIntent.*
+import android.app.PendingIntent.FLAG_MUTABLE
+import android.app.PendingIntent.FLAG_UPDATE_CURRENT
+import android.app.PendingIntent.getActivity
+import android.app.PendingIntent.getBroadcast
+import android.app.PendingIntent.getService
 import android.app.Service
-import android.content.*
+import android.content.BroadcastReceiver
+import android.content.ClipData
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.content.res.Configuration
@@ -31,6 +40,7 @@ import io.legado.app.constant.AppConst
 import io.legado.app.help.IntentHelp
 import splitties.systemservices.clipboardManager
 import splitties.systemservices.connectivityManager
+import splitties.systemservices.uiModeManager
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.system.exitProcess
@@ -157,6 +167,9 @@ fun Context.getCompatDrawable(@DrawableRes id: Int): Drawable? = ContextCompat.g
 
 fun Context.getCompatColorStateList(@ColorRes id: Int): ColorStateList? =
     ContextCompat.getColorStateList(this, id)
+
+fun Context.checkSelfUriPermission(uri: Uri, modeFlags: Int): Int =
+    checkUriPermission(uri, Process.myPid(), Process.myUid(), modeFlags)
 
 fun Context.restart() {
     val intent: Intent? = packageManager.getLaunchIntentForPackage(packageName)
@@ -304,6 +317,7 @@ fun Context.openUrl(url: String) {
         startActivity(IntentHelp.getBrowserIntent(url))
     } catch (e: Exception) {
         toastOnUi(e.localizedMessage ?: "open url error")
+        e.printOnDebug()
     }
 }
 
@@ -312,9 +326,11 @@ fun Context.openUrl(uri: Uri) {
         startActivity(IntentHelp.getBrowserIntent(uri))
     } catch (e: Exception) {
         toastOnUi(e.localizedMessage ?: "open url error")
+        e.printOnDebug()
     }
 }
 
+@SuppressLint("ObsoleteSdkInt")
 fun Context.openFileUri(uri: Uri, type: String? = null) {
     val intent = Intent()
     intent.action = Intent.ACTION_VIEW
@@ -328,6 +344,7 @@ fun Context.openFileUri(uri: Uri, type: String? = null) {
         startActivity(intent)
     } catch (e: Exception) {
         toastOnUi(e.stackTraceStr)
+        e.printOnDebug()
     }
 }
 
@@ -344,7 +361,9 @@ val Context.isPad: Boolean
         return (resources.configuration.screenLayout and Configuration.SCREENLAYOUT_SIZE_MASK) >= Configuration.SCREENLAYOUT_SIZE_LARGE
     }
 
-@Suppress("DEPRECATION")
+val Context.isTv: Boolean
+    get() = uiModeManager.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
+
 val Context.channel: String
     get() {
         try {

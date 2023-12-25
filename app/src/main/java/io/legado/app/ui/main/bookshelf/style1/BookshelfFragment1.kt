@@ -11,12 +11,11 @@ import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.FragmentStatePagerAdapter
 import com.google.android.material.tabs.TabLayout
 import io.legado.app.R
-import io.legado.app.constant.AppConst
-import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
-import io.legado.app.databinding.FragmentBookshelfBinding
+import io.legado.app.databinding.FragmentBookshelf1Binding
+import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.book.group.GroupEditDialog
@@ -30,11 +29,17 @@ import kotlin.collections.set
 /**
  * 书架界面
  */
-class BookshelfFragment1 : BaseBookshelfFragment(R.layout.fragment_bookshelf),
+class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1),
     TabLayout.OnTabSelectedListener,
     SearchView.OnQueryTextListener {
 
-    private val binding by viewBinding(FragmentBookshelfBinding::bind)
+    constructor(position: Int) : this() {
+        val bundle = Bundle()
+        bundle.putInt("position", position)
+        arguments = bundle
+    }
+
+    private val binding by viewBinding(FragmentBookshelf1Binding::bind)
     private val adapter by lazy { TabFragmentPageAdapter(childFragmentManager) }
     private val tabLayout: TabLayout by lazy {
         binding.titleBar.findViewById(R.id.tab_layout)
@@ -80,7 +85,7 @@ class BookshelfFragment1 : BaseBookshelfFragment(R.layout.fragment_bookshelf),
     @Synchronized
     override fun upGroup(data: List<BookGroup>) {
         if (data.isEmpty()) {
-            appDb.bookGroupDao.enableGroup(AppConst.bookGroupAllId)
+            appDb.bookGroupDao.enableGroup(BookGroup.IdAll)
         } else {
             if (data != bookGroups) {
                 bookGroups.clear()
@@ -97,10 +102,14 @@ class BookshelfFragment1 : BaseBookshelfFragment(R.layout.fragment_bookshelf),
         }
     }
 
+    override fun upSort() {
+        adapter.notifyDataSetChanged()
+    }
+
     private fun selectLastTab() {
         tabLayout.post {
             tabLayout.removeOnTabSelectedListener(this)
-            tabLayout.getTabAt(getPrefInt(PreferKey.saveTabPosition, 0))?.select()
+            tabLayout.getTabAt(AppConfig.saveTabPosition)?.select()
             tabLayout.addOnTabSelectedListener(this)
         }
     }
@@ -116,7 +125,7 @@ class BookshelfFragment1 : BaseBookshelfFragment(R.layout.fragment_bookshelf),
     override fun onTabUnselected(tab: TabLayout.Tab) = Unit
 
     override fun onTabSelected(tab: TabLayout.Tab) {
-        putPrefInt(PreferKey.saveTabPosition, tab.position)
+        AppConfig.saveTabPosition = tab.position
     }
 
     override fun gotoTop() {
@@ -134,14 +143,15 @@ class BookshelfFragment1 : BaseBookshelfFragment(R.layout.fragment_bookshelf),
          * 确定视图位置是否更改时调用
          * @return POSITION_NONE 已更改,刷新视图. POSITION_UNCHANGED 未更改,不刷新视图
          */
-        override fun getItemPosition(`object`: Any): Int {
-            val fragment = `object` as BooksFragment
+        override fun getItemPosition(any: Any): Int {
+            val fragment = any as BooksFragment
             val position = fragment.position
             val group = bookGroups.getOrNull(position)
             if (fragment.groupId != group?.groupId) {
                 return POSITION_NONE
             }
             val bookSort = group.getRealBookSort()
+            fragment.setEnableRefresh(group.enableRefresh)
             if (fragment.bookSort != bookSort) {
                 fragment.upBookSort(bookSort)
             }

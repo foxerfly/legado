@@ -2,14 +2,17 @@ package io.legado.app.help
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.net.Uri
 import android.os.Build
+import android.os.Looper
 import android.webkit.WebSettings
 import io.legado.app.constant.AppConst
+import io.legado.app.constant.AppLog
+import io.legado.app.exception.NoStackTraceException
+import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.LocalConfig
 import io.legado.app.model.ReadAloud
-import io.legado.app.utils.FileUtils
-import io.legado.app.utils.getFile
-import io.legado.app.utils.longToastOnUi
-import io.legado.app.utils.stackTraceStr
+import io.legado.app.utils.*
 import splitties.init.appCtx
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -20,7 +23,6 @@ import java.util.concurrent.TimeUnit
 /**
  * 异常管理类
  */
-@Suppress("DEPRECATION")
 class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
 
     /**
@@ -37,9 +39,26 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
      * uncaughtException 回调函数
      */
     override fun uncaughtException(thread: Thread, ex: Throwable) {
-        ReadAloud.stop(context)
-        handleException(ex)
-        mDefaultHandler?.uncaughtException(thread, ex)
+        if (shouldAbsorb(ex)) {
+            AppLog.put("发生未捕获的异常\n${ex.localizedMessage}", ex)
+            Looper.loop()
+        } else {
+            ReadAloud.stop(context)
+            handleException(ex)
+            mDefaultHandler?.uncaughtException(thread, ex)
+        }
+    }
+
+    private fun shouldAbsorb(e: Throwable): Boolean {
+        return when {
+            e::class.simpleName == "CannotDeliverBroadcastException" -> true
+            e is SecurityException && e.message?.contains(
+                "nor current process has android.permission.OBSERVE_GRANT_REVOKE_PERMISSIONS",
+                true
+            ) == true -> true
+
+            else -> false
+        }
     }
 
     /**
@@ -47,9 +66,10 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
      */
     private fun handleException(ex: Throwable?) {
         if (ex == null) return
+        LocalConfig.appCrash = true
         //保存日志文件
         saveCrashInfo2File(ex)
-        context.longToastOnUi(ex.stackTraceStr)
+        context.longToastOnUiLegacy(ex.stackTraceStr)
         Thread.sleep(3000)
     }
 
@@ -105,14 +125,26 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
             val timestamp = System.currentTimeMillis()
             val time = format.format(Date())
             val fileName = "crash-$time-$timestamp.log"
-            appCtx.externalCacheDir?.let { rootFile ->
-                rootFile.getFile("crash").listFiles()?.forEach {
-                    if (it.lastModified() < System.currentTimeMillis() - TimeUnit.DAYS.toMillis(7)) {
-                        it.delete()
-                    }
-                }
-                FileUtils.createFileIfNotExist(rootFile, "crash", fileName)
+            try {
+                val backupPath = AppConfig.backupPath
+                    ?: throw NoStackTraceException("备份路径未配置")
+                val uri = Uri.parse(backupPath)
+                val fileDoc = FileDoc.fromUri(uri, true)
+                fileDoc.createFileIfNotExist(fileName, "crash")
                     .writeText(sb.toString())
+            } catch (e: Exception) {
+                appCtx.externalCacheDir?.let { rootFile ->
+                    rootFile.getFile("crash").listFiles()?.forEach {
+                        if (it.lastModified() < System.currentTimeMillis() - TimeUnit.DAYS.toMillis(
+                                7
+                            )
+                        ) {
+                            it.delete()
+                        }
+                    }
+                    FileUtils.createFileIfNotExist(rootFile, "crash", fileName)
+                        .writeText(sb.toString())
+                }
             }
         }
 

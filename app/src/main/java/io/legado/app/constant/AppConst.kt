@@ -4,9 +4,7 @@ import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.provider.Settings
 import androidx.annotation.Keep
-import com.script.rhino.RhinoScriptEngine
 import io.legado.app.BuildConfig
-import io.legado.app.utils.channel
 import splitties.init.appCtx
 import java.text.SimpleDateFormat
 
@@ -14,8 +12,6 @@ import java.text.SimpleDateFormat
 object AppConst {
 
     const val APP_TAG = "Legado"
-
-    val isPlayChannel = appCtx.channel == "google"
 
     const val channelIdDownload = "channel_download"
     const val channelIdReadAloud = "channel_read_aloud"
@@ -26,10 +22,6 @@ object AppConst {
     const val MAX_THREAD = 9
 
     const val DEFAULT_WEBDAV_ID = -1L
-
-    val SCRIPT_ENGINE: RhinoScriptEngine by lazy {
-        RhinoScriptEngine()
-    }
 
     val timeFormat: SimpleDateFormat by lazy {
         SimpleDateFormat("HH:mm")
@@ -42,21 +34,6 @@ object AppConst {
     val fileNameFormat: SimpleDateFormat by lazy {
         SimpleDateFormat("yy-MM-dd-HH-mm-ss")
     }
-
-    const val rootGroupId = -100L
-    const val bookGroupAllId = -1L
-    const val bookGroupLocalId = -2L
-    const val bookGroupAudioId = -3L
-    const val bookGroupNetNoneId = -4L
-    const val bookGroupLocalNoneId = -5L
-    const val bookGroupErrorId = -11L
-
-    const val notificationIdRead = -1122391
-    const val notificationIdAudio = -1122392
-    const val notificationIdCache = -1122393
-    const val notificationIdWeb = -1122394
-    const val notificationIdDownload = -1122395
-    const val notificationIdCheckSource = -1122395
 
     const val imagePathKey = "imagePath"
 

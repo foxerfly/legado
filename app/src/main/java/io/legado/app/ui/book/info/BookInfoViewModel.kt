@@ -5,7 +5,6 @@ import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import com.github.junrar.exception.UnsupportedRarV5Exception
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppLog
@@ -63,6 +62,7 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
             }
             throw NoStackTraceException("未找到书籍")
         }.onError {
+            AppLog.put(it.localizedMessage, it)
             context.toastOnUi(it.localizedMessage)
         }
     }
@@ -98,7 +98,7 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
 
     private fun upCoverByRule(book: Book) {
         execute {
-            if (book.customCoverUrl.isNullOrBlank()) {
+            if (book.coverUrl.isNullOrBlank() && book.customCoverUrl.isNullOrBlank()) {
                 BookCover.searchCover(book)?.let { coverUrl ->
                     book.customCoverUrl = coverUrl
                     bookData.postValue(book)
@@ -126,12 +126,18 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                         book.lastCheckTime = remoteBook.lastModify
                     }
                 }
+            } else {
+                val bs = bookSource ?: return@execute
+                if (book.originName != bs.bookSourceName) {
+                    book.originName = bs.bookSourceName
+                }
             }
         }.onError {
             when (it) {
                 is ObjectNotFoundException -> {
                     book.origin = BookType.localTag
                 }
+
                 else -> {
                     AppLog.put("下载远程书籍<${book.name}>失败", it)
                 }
@@ -151,6 +157,7 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                 loadChapter(book, scope)
             } else {
                 bookSource?.let { bookSource ->
+                    val oldBook = book.copy()
                     WebBook.getBookInfo(this, bookSource, book, canReName = canReName)
                         .onSuccess(IO) {
                             appDb.bookDao.getBook(book.name, book.author)?.let {
@@ -159,6 +166,9 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                             bookData.postValue(it)
                             if (inBookshelf) {
                                 appDb.bookDao.update(it)
+                                if (oldBook.name != book.name) {
+                                    BookHelp.updateCacheFolder(oldBook, book)
+                                }
                             }
                             if (it.isWebFile) {
                                 loadWebFile(it, scope)
@@ -166,7 +176,7 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                                 loadChapter(it, scope)
                             }
                         }.onError {
-                            AppLog.put("获取数据信息失败\n${it.localizedMessage}", it)
+                            AppLog.put("获取书籍信息失败\n${it.localizedMessage}", it)
                             context.toastOnUi(R.string.error_get_book_info)
                         }
                 } ?: let {
@@ -194,7 +204,8 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                     val oldBook = book.copy()
                     WebBook.getChapterList(this, bookSource, book, true)
                         .onSuccess(IO) {
-                            if (inBookshelf) {
+                            val dbBook = appDb.bookDao.getBook(book.name, book.author)
+                            if (dbBook?.bookUrl == oldBook.bookUrl) {
                                 if (oldBook.bookUrl == book.bookUrl) {
                                     appDb.bookDao.update(book)
                                 } else {
@@ -239,9 +250,12 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
     ) {
         execute(scope) {
             webFiles.clear()
-            val fileName = "${book.name} 作者：${book.author}"
+            val fileNameNoExtension = if (book.author.isBlank()) book.name
+            else "${book.name} 作者：${book.author}"
             book.downloadUrls!!.map {
-                val mFileName = UrlUtil.getFileName(AnalyzeUrl(it, source = bookSource)) ?: fileName
+                val analyzeUrl = AnalyzeUrl(it, source = bookSource)
+                val mFileName = UrlUtil.getFileName(analyzeUrl)
+                    ?: "${fileNameNoExtension}.${analyzeUrl.type}"
                 WebFile(it, mFileName)
             }
         }.onError {
@@ -293,19 +307,13 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                 AppPattern.bookFileRegex.matches(it)
             }
         }.onError {
-            when (it) {
-                is UnsupportedRarV5Exception -> context.toastOnUi("暂不支持 rar v5 解压")
-                else -> {
-                    AppLog.put("getArchiveEntriesName Error:\n${it.localizedMessage}", it)
-                    context.toastOnUi("getArchiveEntriesName Error:\n${it.localizedMessage}")
-                }
-            }
+            AppLog.put("getArchiveEntriesName Error:\n${it.localizedMessage}", it)
+            context.toastOnUi("getArchiveEntriesName Error:\n${it.localizedMessage}")
         }.onSuccess {
             onSuccess.invoke(it)
         }
     }
 
-    @Suppress("BlockingMethodInNonBlockingContext")
     fun importArchiveBook(
         archiveFileUri: Uri,
         archiveEntryName: String,
@@ -405,6 +413,14 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
         }.onSuccess {
             success?.invoke()
         }
+    }
+
+    fun getBook(toastNull: Boolean = true): Book? {
+        val book = bookData.value
+        if (toastNull && book == null) {
+            context.toastOnUi("book is null")
+        }
+        return book
     }
 
     fun delBook(deleteOriginal: Boolean = false, success: (() -> Unit)? = null) {
