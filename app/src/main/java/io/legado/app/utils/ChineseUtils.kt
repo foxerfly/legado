@@ -32,19 +32,20 @@ object ChineseUtils {
     fun fixT2sDict() {
         val dict = DictionaryContainer.getInstance().getDictionary(TransType.TRADITIONAL_TO_SIMPLE)
         dict.run {
-            remove("劈")
-            remove("脊")
-            remove("支援")
-            remove("沈默")
-            remove("路易斯")
+            remove("劈", "脊", "槃")
+            remove("支援", "沈默", "類比", "模擬", "划槳", "列根", "先進", "雪梨", "雪糕")
+            remove("零錢", "零钱", "離線", "碟片")
+            remove("路易斯", "非同步", "出租车", "周杰倫", "马铃薯", "馬鈴薯")
         }
     }
 
-    fun BasicDictionary.remove(key: String) {
-        if (key.length == 1) {
-            chars.remove(key[0])
-        } else {
-            dict.remove(key)
+    fun BasicDictionary.remove(vararg keys: String) {
+        for (key in keys) {
+            if (key.length == 1) {
+                chars.remove(key[0])
+            } else {
+                dict.remove(key)
+            }
         }
     }
 

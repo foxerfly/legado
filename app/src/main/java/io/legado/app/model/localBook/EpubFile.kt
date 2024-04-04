@@ -16,7 +16,6 @@ import me.ag2s.epublib.domain.EpubBook
 import me.ag2s.epublib.domain.Resource
 import me.ag2s.epublib.domain.TOCReference
 import me.ag2s.epublib.epub.EpubReader
-import me.ag2s.epublib.util.StringUtil
 import me.ag2s.epublib.util.zip.AndroidZipFile
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
@@ -25,6 +24,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.Charset
 
@@ -176,18 +176,8 @@ class EpubFile(var book: Book) {
         }
         //title标签中的内容不需要显示在正文中，去除
         elements.select("title").remove()
-        elements.select("img").forEach {
-            val src = it.attr("src")
-            if (src == "cover.jpeg") {
-                return@forEach
-            }
-            val path = chapter.url.substringBeforeLast("/", "")
-            val absSrc = if (path.isEmpty()) {
-                src
-            } else {
-                StringUtil.collapsePathDots("$path/$src")
-            }
-            it.attr("src", absSrc)
+        elements.select("img[src=\"cover.jpeg\"]").forEachIndexed { i, it ->
+            if (i > 0) it.remove()
         }
         val tag = Book.rubyTag
         if (book.getDelTag(tag)) {
@@ -253,12 +243,16 @@ class EpubFile(var book: Book) {
                 //getElementsMatchingOwnText(chapter.title)?.remove()
             }
         }
+        bodyElement.select("img").forEach {
+            val src = it.attr("src")
+            it.attr("src", URI(res.href).resolve(src).toString())
+        }
         return bodyElement
     }
 
     private fun getImage(href: String): InputStream? {
         if (href == "cover.jpeg") return epubBook?.coverImage?.inputStream
-        val abHref = URLDecoder.decode(href.replace("../", ""), "UTF-8")
+        val abHref = URLDecoder.decode(href, "UTF-8")
         return epubBook?.resources?.getByHref(abHref)?.inputStream
     }
 
