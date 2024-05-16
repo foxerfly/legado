@@ -188,16 +188,16 @@ object NetworkUtils {
     /**
      * Get local Ip address.
      */
-    fun getLocalIPAddress(): InetAddress? {
+    fun getLocalIPAddress(): List<InetAddress> {
         val enumeration: Enumeration<NetworkInterface>
         try {
             enumeration = NetworkInterface.getNetworkInterfaces()
         } catch (e: SocketException) {
             e.printOnDebug()
-            return null
+            return emptyList()
         }
 
-        var fallbackAddress: InetAddress? = null
+        val addressList = mutableListOf<InetAddress>()
 
         while (enumeration.hasMoreElements()) {
             val nif = enumeration.nextElement()
@@ -205,16 +205,11 @@ object NetworkUtils {
             while (addresses.hasMoreElements()) {
                 val address = addresses.nextElement()
                 if (!address.isLoopbackAddress && isIPv4Address(address.hostAddress)) {
-                    if (nif.name?.startsWith("wl") == true) {
-                        return address
-                    }
-                    if (fallbackAddress == null) {
-                        fallbackAddress = address
-                    }
+                    addressList.add(address)
                 }
             }
         }
-        return fallbackAddress
+        return addressList
     }
 
     /**
